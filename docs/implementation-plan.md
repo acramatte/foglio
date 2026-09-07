@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: Phase 0 bootstrap implemented and locally verified on Linux; hosted CI run evidence pending because no remote is configured. Phase 1 and later are not started. See task evidence.
+Status: Phase 0 complete, verified locally on Linux and in [hosted CI](https://github.com/acramatte/foglio/actions/runs/34130532775) for commit `33a91e1`. Phase 1 and later are not started. See task evidence.
 
 ## Delivery strategy
 

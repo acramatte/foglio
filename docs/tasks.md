@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: P0-01/P0-02 verified locally; P0-03 local checks pass, hosted CI evidence pending. Phase 1 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: P0-01/P0-02/P0-03 verified complete; local and hosted CI gates pass. Phase 1 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -24,18 +24,19 @@ Do not check a box just because code exists. The source brief's illustrative exa
 |---|---|---|---|---|
 | [x] | P0-01 | — | Confirm D09 naming and D18 supported OS matrix; establish root README conventions and planning/source precedence | Decisions recorded, crate/binary names consistent, first usable milestone explicitly Phase 0–1, current request Phase 0 only (D22); no speculative subsystems |
 | [x] | P0-02 | P0-01 | Create root `Cargo.toml`, `rust-toolchain.toml`, `Cargo.lock`, `.gitignore`, `crates/notes-core`, `crates/notes-cli`; document selected license instead of guessing one | Both crates build; actual CLI `--help` works; core has no UI dependency; root test suite runs |
-| [-] | P0-03 | P0-02 | Add `.github/workflows/ci.yml` and test instructions; format, strict Clippy, workspace tests; isolate test config/root | CI definition validated and commands run locally; CI run evidence required once hosted; no real home/library writes (V01) |
+| [x] | P0-03 | P0-02 | Add `.github/workflows/ci.yml` and test instructions; format, strict Clippy, workspace tests; isolate test config/root | CI definition validated and commands run locally; CI run evidence required once hosted; no real home/library writes (V01) |
 
 ## Phase 0 execution evidence
 
-- **Tasks:** P0-01/P0-02 verified locally; P0-03 implemented, pending hosted run. The local portion of the Phase 0 gate passes; the full CI execution gate remains open.
+- **Tasks:** P0-01/P0-02/P0-03 verified complete. Both the local checks and hosted CI execution satisfy the Phase 0 gate.
 - **Decision changes:** user approved D09 naming, D18 Linux-first, D21 MIT, and D22 Phase-0-only request scope. README records conventions and source precedence.
-- **Implementation/PR:** local working tree; no commit, remote, push, or PR created. Workspace manifests, lockfile, pinned toolchain, dependency-free core, clap CLI, black-box tests, MIT license, and CI definition added.
+- **Implementation/PR:** commit [`33a91e1`](https://github.com/acramatte/foglio/commit/33a91e1886a3edc6ec5eca8e182e99b88c4f74c7) on `main` in the private `acramatte/foglio` repository; no PR (direct-to-main delivery approved by the user). Workspace manifests, lockfile, pinned toolchain, dependency-free core, clap CLI, black-box tests, MIT license, and CI definition added.
 - **Environment:** Linux x86_64; official Rust/cargo 1.93.1. System Rust lacked rustfmt/Clippy, so an isolated rustup installation was created under `/tmp/foglio-phase0-tools` without changing shell startup files or replacing system Rust. For this session's toolchain: `export PATH=/tmp/foglio-phase0-tools/cargo/bin:$PATH RUSTUP_HOME=/tmp/foglio-phase0-tools/rustup CARGO_HOME=/tmp/foglio-phase0-tools/cargo`. Other developers should use normal rustup setup from README.
 - **Red/green:** `cargo test --workspace --all-features` initially failed all three CLI tests against an empty `main` (missing help/version and incorrect usage status); the implemented parser passes all three.
 - **Tests:** `cargo fmt --all -- --check` passed; `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings` passed; `cargo build --locked --workspace` passed; `cargo test --locked --workspace --all-features` passed (3 black-box tests; core and doc tests currently contain no cases); `/tmp/foglio-phase0-tools/bin/actionlint .github/workflows/ci.yml` passed with actionlint 1.7.7.
 - **Acceptance evidence (V01):** actual executable tests cover `--help`, `-h`, no arguments, `--version`, unknown flag and unavailable commands. Each subprocess clears inherited environment and uses temporary HOME/config/cache/data/library directories; assertions confirm no application state or note changes. CLI path-depends on core; core has no dependencies or product scaffolding. Formatting and strict lint cover both crates.
-- **Limitations:** no remote is configured, so no GitHub Actions run can be claimed. P0-03 remains in progress until hosted evidence is linked; do not claim the full CI phase gate complete. No Phase 1 operations, filesystem-save safety, macOS/Windows support, or later subsystems are implemented or verified.
+- **Hosted CI evidence:** [run 34130532775](https://github.com/acramatte/foglio/actions/runs/34130532775), workflow `CI`, job `Core and CLI (Linux)`, completed successfully for `33a91e1886a3edc6ec5eca8e182e99b88c4f74c7`. Pinned toolchain setup, formatting, strict Clippy, core/CLI build, workspace tests, and isolated CLI help all passed. Verified through authenticated GitHub CLI run/job reads.
+- **Limitations:** no Phase 1 operations, filesystem-save safety, macOS/Windows support, or later subsystems are implemented or verified.
 
 ## Phase 1 — Filesystem notes and CLI only
 

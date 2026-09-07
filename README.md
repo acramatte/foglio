@@ -2,7 +2,7 @@
 
 A local-first Markdown notes application with a headless Rust core. CLI note operations and a Tauri desktop client are planned, not implemented.
 
-**Status: Phase 0 bootstrap implemented and verified locally on Linux x86_64.** Hosted CI execution is pending: this repository has no remote. Phase 1 has not started.
+**Status: Phase 0 complete.** Bootstrap checks passed locally on Linux x86_64 and in [hosted CI](https://github.com/acramatte/foglio/actions/runs/34130532775) for commit `33a91e1`. Phase 1 has not started.
 
 Markdown files are authoritative. SQLite will be a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
