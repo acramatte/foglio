@@ -37,15 +37,16 @@ fn run(args: &[&str]) -> std::process::Output {
 }
 
 #[test]
-fn help_is_successful_and_describes_only_bootstrap() {
+fn help_describes_phase_one_without_opening_state() {
     for args in [&["--help"][..], &["-h"][..], &[][..]] {
         let output = run(args);
         assert!(output.status.success());
         assert!(output.stderr.is_empty());
         let text = String::from_utf8(output.stdout).unwrap();
         assert!(text.contains("Usage: notes"));
-        assert!(text.contains("Phase 0"));
-        assert!(!text.contains("Commands:"));
+        assert!(text.contains("Commands:"));
+        assert!(text.contains("init"));
+        assert!(text.contains("delete"));
     }
 }
 
@@ -62,14 +63,10 @@ fn version_matches_package() {
 
 #[test]
 fn unsupported_commands_and_flags_are_usage_errors() {
-    for argument in ["init", "sync", "--unknown"] {
+    for argument in ["search", "sync", "--unknown"] {
         let output = run(&[argument]);
         assert_eq!(output.status.code(), Some(2));
         assert!(output.stdout.is_empty());
-        assert!(
-            String::from_utf8(output.stderr)
-                .unwrap()
-                .contains("unexpected argument")
-        );
+        assert!(String::from_utf8(output.stderr).unwrap().contains("error:"));
     }
 }

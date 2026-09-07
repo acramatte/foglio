@@ -26,7 +26,23 @@ The user approved these choices before implementation:
 | D21 | MIT license | Explicit owner selection; root LICENSE and Cargo manifests |
 | D22 | This request implements Phase 0 only; first usable milestone remains Phase 0–1 | Explicit request scope; do not start Phase 1 implicitly |
 
-## Proposed implementation defaults
+## Accepted Phase 1 decisions
+
+The user explicitly requested Phase 1 and approved the proposed defaults before implementation. D22 remains the historical scope of the earlier bootstrap request; it does not constrain this delivery. [Phase 1 evidence](phase1.md) resolves S01/S02 on the tested Linux filesystem.
+
+| ID | Accepted choice | Rationale / evidence |
+|---|---|---|
+| D10 | XDG config (HOME fallback) outside the library; selected canonical root and root-keyed cooperative locks; no cache until needed | Shared selection and app-state deletion/reselection tests; Phase 1 has no derived DB |
+| D11 | Recursive hidden-inclusive lowercase `.md` discovery; no symlink following; no hard-link writes; portable UTF-8 mutation paths | V02/V07 tests; unsupported entries remain unchanged and diagnosed |
+| D12 | Validate with pinned `serde_yaml_ng` and `yaml-rust2`; patch owned fields, never reserialize imported YAML | S01 fixture tests; unsupported YAML/resource limits explicitly described in Phase 1 notes |
+| D13 | Opaque SHA-256 revisions, cooperative nonblocking locks, same-directory staged/synced replacement, atomic Linux no-replace create/move | S02 stale/fault/process-kill tests; final external-writer/ancestor race remains documented |
+| D14 | Every duplicate ID member ambiguous; no silent repair; explicit path inspection; incomplete identity maps block existing-note mutation | V05 plus malformed-metadata duplicate regression |
+| D15 | `--library`, `--json`, `id:`/`path:` selectors; permanent deletion needs `--yes` or terminal confirmation | Stable envelope/exit codes and real executable/PTY tests; code 5 reserved for later doctor |
+| D20 | No undo/history; confirmed permanent deletion of one note | Stale confirmation and deletion tests; empty directories preserved |
+| D23 | Current request authorizes Phase 1 only, after completed Phase 0 | Stop after P1-07; no Phase 2+ scaffolding |
+| D24 | Refuse replacements with ACLs/xattrs/special mode bits or changed owner/group; cap complete notes at 16 MiB | Do not silently broaden access or commit notes the reader cannot reopen; actual ACL/group/size tests |
+
+## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |
 |---|---|---|

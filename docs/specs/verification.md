@@ -1,6 +1,6 @@
 # Verification specification
 
-Status: V01 bootstrap checks pass locally on Linux x86_64 with Rust 1.93.1 and in [hosted CI](https://github.com/acramatte/foglio/actions/runs/34130532775) for commit `33a91e1`. Phase 0 is complete. Exact evidence is in [tasks](../tasks.md). V02–V27 remain planned and unrun.
+Status: V01–V10 Phase 1 checks pass locally on Linux x86_64 with Rust 1.93.1; see [exact evidence and limitations](../phase1.md#verification-evidence). Hosted CI currently covers Phase 0 only. V11–V27 remain planned and unrun.
 
 ## Test discipline
 

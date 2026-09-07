@@ -1,10 +1,10 @@
 # Implementation plan
 
-Status: Phase 0 complete, verified locally on Linux and in [hosted CI](https://github.com/acramatte/foglio/actions/runs/34130532775) for commit `33a91e1`. Phase 1 and later are not started. See task evidence.
+Status: Phase 0 complete locally and in hosted CI. Phase 1 implemented and verified locally on Linux; hosted CI for the uncommitted Phase 1 changes is pending. Phase 2 onward is not started. See [Phase 1 evidence](phase1.md) and task status.
 
 ## Delivery strategy
 
-Build vertical slices, not dormant future layers. The first usable milestone covers **Phase 0 and Phase 1 only**. The user narrowed this implementation request to **Phase 0 only** (D22); Phase 1 is not implicitly authorized. Do not create SQLite, watcher, Tauri, sync, encryption, or plugin scaffolding in that delivery.
+Build vertical slices, not dormant future layers. The first usable milestone covers **Phase 0 and Phase 1 only**. The initial request was Phase 0 only (historical D22). The user subsequently explicitly requested Phase 1 and approved its implementation defaults. No SQLite, watcher, Tauri, sync, encryption, or plugin scaffolding belongs in this delivery.
 
 Requirements: [product](specs/product.md). Contracts: [technical](specs/technical.md). Work items: [tasks](tasks.md). Evidence: [verification](specs/verification.md). Proposed decisions: [register](decisions.md).
 

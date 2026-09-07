@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: P0-01/P0-02/P0-03 verified complete; local and hosted CI gates pass. Phase 1 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07 verified locally; Phase 1 hosted CI pending. Phase 2 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -42,15 +42,25 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P1-01 | P0-03 | Implement library/config resolution, path types and recursive discovery in `library.rs`/`filesystem.rs`; resolve D10/D11 | Repeated init preserves contents; shared config resolves selected root; paths cannot escape; non-note/symlink/unsupported inputs diagnosed (V02, V07) |
-| [ ] | P1-02 | P1-01 | Run S01; implement validated `NoteId`, frontmatter/body parser, title extraction, tag semantics; preservation fixtures under `crates/notes-core/tests/fixtures/` | Valid ULIDs and both tag forms parse; malformed/duplicate-key/wrong-type metadata stays byte-identical; unknown nested keys/comments/body/BOM/CRLF survive supported patches (V03, V04) |
-| [ ] | P1-03 | P1-02 | Run S02; implement revision preconditions, cooperative lock, staging/flush/replace, no-clobber create/move, explicit commit outcomes | Fault and stale-write tests inspect disk; occupied targets remain unchanged; permissions preserved; external-writer race/platform limits documented (V06, V07, V08) |
-| [ ] | P1-04 | P1-03 | Implement safe missing-ID adoption, full discovery diagnostics, duplicate-group policy in core | Imported body survives; read-only/unstable inputs not overwritten; every duplicate member is ambiguous; no silent ID regeneration (V04, V05) |
-| [ ] | P1-05 | P1-04 | Implement create/get/list/update/move/delete/add-tag/remove-tag domain APIs | Actual temp-filesystem lifecycle, stable move identity, metadata-only tag edits, body updates, stale mutation rejection pass (V06, V08) |
-| [ ] | P1-06 | P1-05 | Implement `init/new/list/show/move/delete/tags/tag add/tag remove`, selectors, config override, JSON/errors/help; resolve D15/D20 | Black-box executable lifecycle works; delete confirmation/noninteractive behavior deterministic; stdout/stderr/exit codes tested; no sync/index stubs (V09) |
-| [ ] | P1-07 | P1-06 | Add first-delivery acceptance harness and user documentation; reconcile phase status | Source §43's five checks pass automatically, safety suites pass, deleting config leaves notes intact and root reselection works; Phase 0–1 full gate recorded (V01–V10) |
+| [x] | P1-01 | P0-03 | Implement library/config resolution, path types and recursive discovery in `library.rs`/`filesystem.rs`; resolve D10/D11 | Repeated init preserves contents; shared config resolves selected root; paths cannot escape; non-note/symlink/unsupported inputs diagnosed (V02, V07) |
+| [x] | P1-02 | P1-01 | Run S01; implement validated `NoteId`, frontmatter/body parser, title extraction, tag semantics; preservation fixtures under `crates/notes-core/tests/fixtures/` | Valid ULIDs and both tag forms parse; malformed/duplicate-key/wrong-type metadata stays byte-identical; unknown nested keys/comments/body/BOM/CRLF survive supported patches (V03, V04) |
+| [x] | P1-03 | P1-02 | Run S02; implement revision preconditions, cooperative lock, staging/flush/replace, no-clobber create/move, explicit commit outcomes | Fault and stale-write tests inspect disk; occupied targets remain unchanged; permissions preserved; external-writer race/platform limits documented (V06, V07, V08) |
+| [x] | P1-04 | P1-03 | Implement safe missing-ID adoption, full discovery diagnostics, duplicate-group policy in core | Imported body survives; read-only/unstable inputs not overwritten; every duplicate member is ambiguous; no silent ID regeneration (V04, V05) |
+| [x] | P1-05 | P1-04 | Implement create/get/list/update/move/delete/add-tag/remove-tag domain APIs | Actual temp-filesystem lifecycle, stable move identity, metadata-only tag edits, body updates, stale mutation rejection pass (V06, V08) |
+| [x] | P1-06 | P1-05 | Implement `init/new/list/show/move/delete/tags/tag add/tag remove`, selectors, config override, JSON/errors/help; resolve D15/D20 | Black-box executable lifecycle works; delete confirmation/noninteractive behavior deterministic; stdout/stderr/exit codes tested; no sync/index stubs (V09) |
+| [x] | P1-07 | P1-06 | Add first-delivery acceptance harness and user documentation; reconcile phase status | Source §43's five checks pass automatically, safety suites pass, deleting config leaves notes intact and root reselection works; Phase 0–1 full gate recorded (V01–V10) |
 
 **Stop after P1-07 for the first implementation delivery.**
+
+## Phase 1 execution evidence
+
+- **Tasks/status:** P1-01–P1-07 verified locally; hosted CI remains pending.
+- **Decisions:** user approved D10–D15 and D20, and explicitly authorized Phase 1. S01/S02 findings and supported-input/platform limits are recorded in [Phase 1](phase1.md).
+- **Implementation/PR:** uncommitted working tree, no push or PR. Core, CLI, preservation/fault tests, acceptance harness and CI step implemented without Phase 2 scaffolding.
+- **Tests:** `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo build --locked --workspace`, `cargo test --locked --workspace --all-features`, `python3 tests/acceptance/phase1.py`, actionlint and `git diff --check` pass on Linux x86_64/Rust 1.93.1. Rust: 22 passing tests plus a subprocess fixture invoked by its parent test; Python: 12 passing acceptance scenarios.
+- **Acceptance:** source §43's five invariants and V01–V10 are mapped to actual tests in [verification evidence](phase1.md#verification-evidence), including killed staged writer, stale confirmation, duplicate IDs, YAML preservation and app-state deletion.
+- **Limitations:** Linux local filesystems only, restricted losslessly patchable YAML, ACL/xattr or ownership-changing replacements refused, documented uncooperative-writer/ancestor-swap race. Phase 1 hosted CI has not run; old hosted evidence covers Phase 0 only.
+
 
 ## Phase 2 — Derived index and lexical search
 

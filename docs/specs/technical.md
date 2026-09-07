@@ -1,6 +1,6 @@
 # Technical specification
 
-Status: implementation draft. Normative source requirements are in [product.md](product.md); accepted naming/platform/license/scope choices and remaining proposed defaults are tracked in the [decision register](../decisions.md). API shapes below are contracts to implement, not existing code.
+Status: Phase 1 implemented and verified locally. [Phase 1](../phase1.md) records actual API names, JSON/exit contracts, parser restrictions and filesystem guarantees. Later-phase APIs below remain design contracts, not code. Normative requirements are in [product.md](product.md); choices are in the [decision register](../decisions.md).
 
 ## 1. Workspace and boundaries
 

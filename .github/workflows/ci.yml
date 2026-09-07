@@ -24,6 +24,8 @@ jobs:
         run: cargo build --locked --workspace
       - name: Workspace tests
         run: cargo test --locked --workspace --all-features
+      - name: Phase 1 filesystem and CLI acceptance
+        run: python3 tests/acceptance/phase1.py
       - name: CLI help with isolated state
         shell: bash
         run: |
