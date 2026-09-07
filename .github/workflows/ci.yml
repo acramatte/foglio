@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    name: Core and CLI (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Strict Clippy
+        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Build core and CLI
+        run: cargo build --locked --workspace
+      - name: Workspace tests
+        run: cargo test --locked --workspace --all-features
+      - name: CLI help with isolated state
+        shell: bash
+        run: |
+          sandbox=$(mktemp -d)
+          trap 'rm -rf "$sandbox"' EXIT
+          mkdir -p "$sandbox"/{home,config,cache,data,library}
+          binary="$PWD/target/debug/notes"
+          cd "$sandbox/library"
+          env -i HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" \
+            XDG_CACHE_HOME="$sandbox/cache" XDG_DATA_HOME="$sandbox/data" \
+            "$binary" --help

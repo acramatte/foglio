@@ -1,10 +1,10 @@
 # Implementation plan
 
-Status: not started. This delivery creates documentation only. The project directory was empty and not a Git repository when inspected.
+Status: Phase 0 bootstrap implemented and locally verified on Linux; hosted CI run evidence pending because no remote is configured. Phase 1 and later are not started. See task evidence.
 
 ## Delivery strategy
 
-Build vertical slices, not dormant future layers. The first implementation request should cover **Phase 0 and Phase 1 only**. Do not create SQLite, watcher, Tauri, sync, encryption, or plugin scaffolding in that delivery.
+Build vertical slices, not dormant future layers. The first usable milestone covers **Phase 0 and Phase 1 only**. The user narrowed this implementation request to **Phase 0 only** (D22); Phase 1 is not implicitly authorized. Do not create SQLite, watcher, Tauri, sync, encryption, or plugin scaffolding in that delivery.
 
 Requirements: [product](specs/product.md). Contracts: [technical](specs/technical.md). Work items: [tasks](tasks.md). Evidence: [verification](specs/verification.md). Proposed decisions: [register](decisions.md).
 

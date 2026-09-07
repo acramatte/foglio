@@ -1,6 +1,6 @@
 # Decision register
 
-Status meanings: **Established** comes from the supplied brief; **Proposed** is a concrete planning default that needs acceptance before implementation; **Spike** needs technical evidence. Nothing here claims an experiment has run.
+Status meanings: **Established** comes from the supplied brief; **Proposed** is a concrete planning default that needs acceptance before implementation; **Spike** needs technical evidence. Phase 0 bootstrap execution is recorded in [tasks](tasks.md); the later-phase spikes remain unrun.
 
 ## Established decisions
 
@@ -15,11 +15,21 @@ Status meanings: **Established** comes from the supplied brief; **Proposed** is 
 | D07 | Incremental phases; first delivery is Phase 0–1 only | §§36, 42–43 |
 | D08 | No speculative sync/encryption/daemon/plugin abstractions | §§3, 42 |
 
+## Accepted Phase 0 decisions
+
+The user approved these choices before implementation:
+
+| ID | Decision | Rationale / gate |
+|---|---|---|
+| D09 | Product Foglio; crates `notes-core` / `notes-cli`; binary `notes` | Preserve source command contracts; P0-01 accepted |
+| D18 | Linux first; macOS/Windows support only after their filesystem and packaging gates pass | Avoid unverified platform claims; P0-01 accepted |
+| D21 | MIT license | Explicit owner selection; root LICENSE and Cargo manifests |
+| D22 | This request implements Phase 0 only; first usable milestone remains Phase 0–1 | Explicit request scope; do not start Phase 1 implicitly |
+
 ## Proposed implementation defaults
 
 | ID | Proposal | Why / decision gate |
 |---|---|---|
-| D09 | Product is Foglio; keep `notes-core`, `notes-cli`, binary `notes` until explicitly renamed | Avoid silently rewriting source command contracts; resolve in P0-01 |
 | D10 | OS-native config/cache directories outside library; config selects root, cache keyed by canonical root | No synced database/lock files; moving root may rebuild; resolve in P1-01 |
 | D11 | Lowercase `.md` regular files only; do not follow symlinks; reject symlink root and mutation paths; refuse writes to hard-linked notes | Tight portable security boundary; non-UTF-8 names diagnosed and not mutated; resolve in P1-01 |
 | D12 | Preserve body bytes, BOM/newlines, unrelated frontmatter text where practical; malformed YAML, duplicate keys, invalid IDs/tags are non-mutating diagnostics | General YAML serialization can destroy comments or values; resolve parser strategy in P1-02 |
@@ -28,7 +38,6 @@ Status meanings: **Established** comes from the supplied brief; **Proposed** is 
 | D15 | CLI human output plus stable `--json`; explicit `id:` / `path:` selectors disambiguate; destructive CLI delete requires `--yes` or terminal confirmation | Scriptability and deliberate destruction; resolve in P1-06 |
 | D16 | Literal text search by default, explicit phrase/prefix modes, exact case-sensitive tag filter, component-aware folder filter | Avoid exposing raw FTS syntax accidentally; resolve in P2-02 |
 | D17 | Source editor and sanitized preview first; rich mode only if round-trip spike passes | Meet v1 without sacrificing Markdown preservation; resolve in P5-01 |
-| D18 | Linux first implementation target; macOS/Windows support claimed only after filesystem and packaging gates run there | Tauri is cross-platform but save semantics are not automatically portable; confirm target matrix in P0-01 |
 | D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note with new ID; no blind force-overwrite | Preserve both versions without introducing history; resolve in P6-01 |
 | D20 | No delete undo/history in v1; delete is a confirmed permanent filesystem removal | Source requires deletion but excludes history; make limitation visible; resolve in P1-06 |
 

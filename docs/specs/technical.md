@@ -1,6 +1,6 @@
 # Technical specification
 
-Status: implementation draft. Normative source requirements are in [product.md](product.md); additional defaults are proposals D09–D20 in the [decision register](../decisions.md). API shapes below are contracts to implement, not existing code.
+Status: implementation draft. Normative source requirements are in [product.md](product.md); accepted naming/platform/license/scope choices and remaining proposed defaults are tracked in the [decision register](../decisions.md). API shapes below are contracts to implement, not existing code.
 
 ## 1. Workspace and boundaries
 

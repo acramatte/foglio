@@ -1,6 +1,6 @@
 # Verification specification
 
-Status: planned checks only. No Rust, CLI, index, watcher, or desktop implementation exists yet, so no application test is claimed as passing.
+Status: V01 bootstrap checks pass locally on Linux x86_64 with Rust 1.93.1; hosted CI is pending because no remote exists. Exact evidence is in [tasks](../tasks.md). V02–V27 remain planned and unrun.
 
 ## Test discipline
 

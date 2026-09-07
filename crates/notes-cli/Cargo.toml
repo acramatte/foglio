@@ -1,0 +1,21 @@
+[package]
+name = "notes-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "notes"
+path = "src/main.rs"
+
+[dependencies]
+clap.workspace = true
+notes-core.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
