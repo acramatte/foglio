@@ -1,7 +1,9 @@
-//! Linux local-filesystem Markdown domain. No derived database or UI state.
+//! Linux local-filesystem Markdown domain with a disposable search index.
 pub mod filesystem;
 pub mod frontmatter;
+pub mod index;
 pub mod library;
+pub mod search;
 pub use filesystem::LibraryRelativePath;
 pub use frontmatter::{Document, NoteId};
 pub use library::{Library, Report};
@@ -12,6 +14,7 @@ use std::fmt;
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     Io,
+    Index,
     Metadata,
     Encoding,
     Path,
@@ -34,6 +37,7 @@ impl ErrorCode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Io => "io",
+            Self::Index => "index",
             Self::Metadata => "metadata",
             Self::Encoding => "encoding",
             Self::Path => "path",

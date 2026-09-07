@@ -1,6 +1,6 @@
 # Technical specification
 
-Status: Phase 1 implemented and verified locally. [Phase 1](../phase1.md) records actual API names, JSON/exit contracts, parser restrictions and filesystem guarantees. Later-phase APIs below remain design contracts, not code. Normative requirements are in [product.md](product.md); choices are in the [decision register](../decisions.md).
+Status: Phases 1–2 implemented and verified locally. [Phase 1](../phase1.md) records filesystem/parser contracts; [Phase 2](../phase2.md) records actual index/search APIs, locking, conservative unknown-identity behavior, JSON and recovery. Phase 3+ APIs below remain design contracts, not code. Normative requirements are in [product.md](product.md); choices are in the [decision register](../decisions.md).
 
 ## 1. Workspace and boundaries
 

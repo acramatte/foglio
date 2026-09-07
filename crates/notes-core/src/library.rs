@@ -51,6 +51,7 @@ impl Report {
 pub struct Library {
     root: PathBuf,
     state: PathBuf,
+    pub(crate) cache: PathBuf,
 }
 fn absolute(p: &Path) -> Result<PathBuf> {
     Ok(if p.is_absolute() {
@@ -83,6 +84,23 @@ pub fn config_dir() -> Result<PathBuf> {
     fs::check_chain(&p)?;
     Ok(p)
 }
+pub fn cache_dir() -> Result<PathBuf> {
+    let base = if let Some(p) = std::env::var_os("XDG_CACHE_HOME") {
+        PathBuf::from(p)
+    } else {
+        PathBuf::from(
+            std::env::var_os("HOME")
+                .ok_or_else(|| Error::new(ErrorCode::Config, "HOME unavailable"))?,
+        )
+        .join(".cache")
+    };
+    if !base.is_absolute() {
+        return Err(Error::new(ErrorCode::Config, "cache base must be absolute"));
+    }
+    let path = base.join("foglio");
+    fs::check_chain(&path)?;
+    Ok(path)
+}
 impl Library {
     pub fn root(&self) -> &Path {
         &self.root
@@ -111,7 +129,8 @@ impl Library {
         if !root.is_dir() {
             return Err(Error::new(ErrorCode::Path, "library is not directory"));
         }
-        Ok(Self { root, state })
+        let cache = state.join("cache");
+        Ok(Self { root, state, cache })
     }
     pub fn resolve(override_root: Option<&Path>) -> Result<Self> {
         let state = config_dir()?;
@@ -122,11 +141,16 @@ impl Library {
             serde_json::from_slice::<PathBuf>(&b)
                 .map_err(|_| Error::new(ErrorCode::Config, "invalid selected root"))?
         };
-        Self::open(&root, &state, false)
+        let mut lib = Self::open(&root, &state, false)?;
+        lib.cache = cache_dir()?;
+        lib.cache_path()?;
+        Ok(lib)
     }
     pub fn init(root: &Path) -> Result<(Self, Report)> {
         let state = config_dir()?;
-        let lib = Self::open(root, &state, true)?;
+        let mut lib = Self::open(root, &state, true)?;
+        lib.cache = cache_dir()?;
+        lib.cache_path()?;
         let _selection = fs::lock(&state.join("selection.lock"))?;
         let config = state.join("config.json");
         let bytes = serde_json::to_vec(&lib.root).map_err(|e| Error::new(ErrorCode::Config, e))?;
@@ -145,7 +169,7 @@ impl Library {
         let report = lib.scan(true)?;
         Ok((lib, report))
     }
-    pub fn lock(&self) -> Result<std::fs::File> {
+    pub fn lock(&self) -> Result<fs::LibraryLock> {
         fs::check_chain(&self.root)?;
         fs::lock(&self.state.join("locks").join(format!(
             "{}.lock",
@@ -175,6 +199,20 @@ impl Library {
                     code: ErrorCode::Ambiguous,
                     message: "duplicate id: every member is ambiguous".into(),
                 });
+            }
+        }
+        if adopt {
+            match self.reconcile_locked(false, false) {
+                Ok((_, status)) => {
+                    if status.incomplete && report.diagnostics.is_empty() {
+                        report.diagnostics.extend(status.diagnostics);
+                    }
+                }
+                Err(e) => report.diagnostics.push(Diagnostic {
+                    path: String::new(),
+                    code: ErrorCode::Index,
+                    message: e.to_string(),
+                }),
             }
         }
         report.incomplete = !report.diagnostics.is_empty();
@@ -361,6 +399,7 @@ impl Library {
         );
         let document = Document::parse(source.as_bytes(), path)?;
         let commit = fs::save(&path_abs, source.as_bytes(), None)?;
+        let commit = self.index_after_commit(commit)?;
         if !commit.durability_confirmed {
             return Err(Error::committed("created; durability uncertain", commit));
         }
@@ -380,11 +419,12 @@ impl Library {
         let e = self.mutation_target(selector, expected)?;
         let source = e.document.with_body(body);
         Document::parse(source.as_bytes(), &e.document.title)?;
-        fs::save(
+        let commit = fs::save(
             &fs::safe_path(&self.root, &e.path)?,
             source.as_bytes(),
             Some(expected),
-        )
+        )?;
+        self.index_after_commit(commit)
     }
     pub fn tag(
         &self,
@@ -408,11 +448,12 @@ impl Library {
             e.document.with_tags(&tags)
         };
         Document::parse(source.as_bytes(), &e.document.title)?;
-        fs::save(
+        let commit = fs::save(
             &fs::safe_path(&self.root, &e.path)?,
             source.as_bytes(),
             Some(expected),
-        )
+        )?;
+        self.index_after_commit(commit)
     }
     pub fn move_note(
         &self,
@@ -422,15 +463,17 @@ impl Library {
     ) -> Result<fs::Commit> {
         let _lock = self.lock()?;
         let e = self.mutation_target(selector, expected)?;
-        fs::move_file(
+        let commit = fs::move_file(
             &fs::safe_path(&self.root, &e.path)?,
             &fs::safe_path(&self.root, to)?,
             expected,
-        )
+        )?;
+        self.index_after_commit(commit)
     }
     pub fn delete(&self, selector: &str, expected: &crate::Revision) -> Result<fs::Commit> {
         let _lock = self.lock()?;
         let e = self.mutation_target(selector, expected)?;
-        fs::delete_file(&fs::safe_path(&self.root, &e.path)?, expected)
+        let commit = fs::delete_file(&fs::safe_path(&self.root, &e.path)?, expected)?;
+        self.index_after_commit(commit)
     }
 }

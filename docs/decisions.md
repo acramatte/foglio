@@ -42,6 +42,16 @@ The user explicitly requested Phase 1 and approved the proposed defaults before 
 | D23 | Current request authorizes Phase 1 only, after completed Phase 0 | Stop after P1-07; no Phase 2+ scaffolding |
 | D24 | Refuse replacements with ACLs/xattrs/special mode bits or changed owner/group; cap complete notes at 16 MiB | Do not silently broaden access or commit notes the reader cannot reopen; actual ACL/group/size tests |
 
+## Accepted Phase 2 decisions
+
+The user explicitly authorized Phase 2 and approved D16 before implementation. Earlier D22/D23 request scopes are historical.
+
+| ID | Accepted choice | Evidence |
+|---|---|---|
+| D16 | Literal tokens by default, explicit phrase/prefix modes, exact case-sensitive tags and component-aware folders | Core/CLI hostile and Unicode query fixtures; SQLite unicode61 tokenization |
+| D25 | Phase 2 only; bundled SQLite/FTS5, transactional cache, root-lock-scoped connections with DELETE journaling | Cache deletion/corruption and concurrent process tests; [Phase 2](phase2.md) |
+| S05 baseline | Record real 1k/50k measurements; 100 ms search p95 remains provisional, not a release guarantee | [Raw baseline and environment](phase2-baseline.json); tmpfs and warm OS-cache limits explicit |
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |

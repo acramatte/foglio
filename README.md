@@ -2,9 +2,9 @@
 
 A local-first Markdown notes application with a headless Rust core and a working filesystem CLI. The Tauri desktop client is planned, not implemented.
 
-**Status: Phase 1 implemented and verified locally on Linux x86_64.** See [commands, safety limits and test evidence](docs/phase1.md). Phase 1 hosted CI is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+**Status: Phases 1–2 implemented and verified locally on Linux x86_64.** See [filesystem safety](docs/phase1.md) and [index/search commands, recovery and benchmark evidence](docs/phase2.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
-Markdown files are authoritative. SQLite will be a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
+Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
 ## Build and test
 
@@ -17,9 +17,10 @@ cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
 cargo test --locked --workspace --all-features
 python3 tests/acceptance/phase1.py
+python3 tests/acceptance/phase2.py
 ```
 
-The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
+The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`, `search`, `rescan`, `reindex`, `status`. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
 
 Tests use actual temporary files and the compiled executable with isolated HOME/XDG state. They cover adoption, body/metadata preservation, guarded lifecycle operations, stale writes, no-clobber collisions, permissions/ACLs, fault injection and a killed staged writer. The Python harness also exercises interactive deletion through a PTY and configuration deletion/reselection. It requires Python 3 on Linux; the platform test requires writable `/dev/shm` on a different filesystem from the temporary library.
 
@@ -29,7 +30,7 @@ Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearin
 
 ## Scope and conventions
 
-This delivery completes the **Phase 0–1 filesystem/CLI milestone** locally. Phase 2 onward remains open. There is no SQLite, search, watcher, Tauri, sync, encryption, or plugin scaffold.
+This delivery completes **Phase 2 index/search** locally on top of the filesystem/CLI milestone. Phase 3 onward remains open. There is no watcher, Tauri, sync, encryption, or plugin scaffold.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.

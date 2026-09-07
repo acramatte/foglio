@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: Phase 0 complete locally and in hosted CI. Phase 1 implemented and verified locally on Linux; hosted CI for the uncommitted Phase 1 changes is pending. Phase 2 onward is not started. See [Phase 1 evidence](phase1.md) and task status.
+Status: Phase 0 complete locally and in hosted CI. Phases 1–2 implemented and verified locally on Linux; hosted CI for these changes is pending. Phase 3 onward is not started. See [Phase 1 evidence](phase1.md), [Phase 2 evidence](phase2.md), and task status.
 
 ## Delivery strategy
 

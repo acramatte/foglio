@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07 verified locally; Phase 1 hosted CI pending. Phase 2 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07 and P2-01–P2-04 verified locally; hosted CI for Phases 1–2 pending. Phase 3 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -66,10 +66,19 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P2-01 | P1-07 | Implement `index.rs`, migrations, FTS5 availability check, cache lifecycle, complete scan/transactional index updates | Scan/edit/move/delete reflected atomically; DB deletion/corruption rebuild preserves notes; inaccessible subtree is not interpreted as empty; duplicates excluded (V11, V12) |
-| [ ] | P2-02 | P2-01 | Implement `search.rs`, parameterized literal/phrase/prefix queries, ranking, tag/folder filters; resolve D16 | Every indexed field searchable; malformed/hostile query safe; deterministic ordering and component-aware paths (V13) |
-| [ ] | P2-03 | P2-02 | Add CLI `search/rescan/reindex/status`; distinguish file-commit/index-degraded results and short-lived watcher state | Reindex reconstructs complete healthy state or explicitly reports partial diagnostics; status counts reflect actual scan/index state; CLI status does not claim background watcher (V11, V12, V14) |
-| [ ] | P2-04 | P2-02, P2-03 | Validate multiple processes/locking and S05 initial fixture/benchmark harness; optimize warm-open only with evidence | Concurrent app writers/rebuild/readers have bounded deterministic outcomes; warm scan avoids unconditional reparsing; baseline at both corpus sizes saved with environment (V15, V25) |
+| [x] | P2-01 | P1-07 | Implement `index.rs`, migrations, FTS5 availability check, cache lifecycle, complete scan/transactional index updates | Scan/edit/move/delete reflected atomically; DB deletion/corruption rebuild preserves notes; inaccessible subtree is not interpreted as empty; duplicates excluded (V11, V12) |
+| [x] | P2-02 | P2-01 | Implement `search.rs`, parameterized literal/phrase/prefix queries, ranking, tag/folder filters; resolve D16 | Every indexed field searchable; malformed/hostile query safe; deterministic ordering and component-aware paths (V13) |
+| [x] | P2-03 | P2-02 | Add CLI `search/rescan/reindex/status`; distinguish file-commit/index-degraded results and short-lived watcher state | Reindex reconstructs complete healthy state or explicitly reports partial diagnostics; status counts reflect actual scan/index state; CLI status does not claim background watcher (V11, V12, V14) |
+| [x] | P2-04 | P2-02, P2-03 | Validate multiple processes/locking and S05 initial fixture/benchmark harness; optimize warm-open only with evidence | Concurrent app writers/rebuild/readers have bounded deterministic outcomes; warm scan avoids unconditional reparsing; baseline at both corpus sizes saved with environment (V15, V25) |
+
+## Phase 2 execution evidence
+
+- **Tasks/status:** P2-01–P2-04 verified locally. User explicitly authorized Phase 2 and approved D16. No Phase 3 scaffolding.
+- **Implementation/PR:** uncommitted working tree; no push or PR. Phase 1 was committed as `3a09508`; its earlier execution block is historical.
+- **Tests:** locked workspace build/tests, formatting, strict Clippy, both Python acceptance harnesses, actionlint and diff checks passed. Actual evidence and limitations: [Phase 2](phase2.md).
+- **Acceptance:** V11–V13, V14 status portion, V15 concurrent/bounded-lock behavior, and V25 initial 1k/50k benchmark completed. Raw measured distributions/environment: [baseline](phase2-baseline.json).
+- **Decisions:** bundled rusqlite/FTS5; transactional schema/version 1; DELETE journal and connection-scoped cooperative locking; explicit post-commit errors; unknown identity suppresses search conservatively.
+- **Limitations:** Linux only; tmpfs/page-cache-warm benchmark, not physical cold-storage evidence; metadata warm scans cannot prove arbitrary offline equality; snapshots hold a root lock; hosted CI pending. Doctor, watcher and desktop gates remain open.
 
 ## Phase 3 — Filesystem watcher
 

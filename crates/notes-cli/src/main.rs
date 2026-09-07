@@ -12,7 +12,7 @@ use std::{
     name = "notes",
     version,
     about = "Foglio: local-first Markdown notes",
-    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Selectors: full ULID, relative .md path, id:ULID or path:relative.md. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/ambiguous/busy. JSON emits result, diagnostics, incomplete, error. No sync/index/watcher commands."
+    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Selectors: full ULID, relative .md path, id:ULID or path:relative.md. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/ambiguous/busy. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
 )]
 struct Cli {
     #[arg(long, global = true)]
@@ -39,6 +39,26 @@ enum Command {
         tags: Vec<String>,
     },
     List,
+    /// Search title, body, path and tags through the disposable index.
+    Search {
+        query: String,
+        #[arg(long, conflicts_with = "prefix")]
+        phrase: bool,
+        #[arg(long)]
+        prefix: bool,
+        #[arg(long)]
+        tag: Option<String>,
+        #[arg(long)]
+        folder: Option<String>,
+        #[arg(long, default_value_t = 50)]
+        limit: usize,
+    },
+    /// Content-check every note and reconcile the index (no adoption).
+    Rescan,
+    /// Reconstruct all derived tables from Markdown (no note writes).
+    Reindex,
+    /// Reconcile metadata candidates and report actual index/process state.
+    Status,
     /// Print the complete Markdown document.
     Show {
         selector: String,
@@ -97,6 +117,57 @@ fn execute(cli: &Cli) -> Result<Output> {
     let mut incomplete = false;
     let (result, human) = match command {
         Command::Init { .. } => unreachable!(),
+        Command::Search {
+            query,
+            phrase,
+            prefix,
+            tag,
+            folder,
+            limit,
+        } => {
+            use notes_core::search::{SearchMode, SearchQuery};
+            let q = SearchQuery {
+                text: query.clone(),
+                mode: if *phrase {
+                    SearchMode::Phrase
+                } else if *prefix {
+                    SearchMode::Prefix
+                } else {
+                    SearchMode::Literal
+                },
+                tag: tag.clone(),
+                folder: folder.clone(),
+                limit: *limit,
+            };
+            let report = lib.search(&q)?;
+            diagnostics = json!(report.status.diagnostics);
+            incomplete = report.status.incomplete;
+            let human = report
+                .hits
+                .iter()
+                .map(|h| format!("{}\t{}\t{}\n{}\n", h.id, h.path, h.title, h.snippet))
+                .collect();
+            (json!(report), human)
+        }
+        Command::Rescan | Command::Reindex | Command::Status => {
+            let status = match command {
+                Command::Rescan => lib.rescan()?,
+                Command::Reindex => lib.reindex()?,
+                _ => lib.status()?,
+            };
+            diagnostics = json!(status.diagnostics);
+            incomplete = status.incomplete;
+            let human = format!(
+                "{} discovered; {} indexed; {} stale; {} ambiguous\n{} parsed; {} reused\nWatcher: inactive (this process)\n",
+                status.discovered_notes,
+                status.indexed_notes,
+                status.stale_notes,
+                status.ambiguous_notes,
+                status.parsed_notes,
+                status.reused_notes
+            );
+            (json!(status), human)
+        }
         Command::New {
             title,
             path,
