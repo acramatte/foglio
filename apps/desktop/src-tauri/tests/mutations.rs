@@ -227,6 +227,14 @@ fn creation_title_defaults_and_validation_preserve_supplied_source() {
         fs::read_to_string(root.join("b.md")).unwrap(),
         "literal source"
     );
+    let spaced = backend
+        .create_from_title(s, "System designs", "", &[])
+        .unwrap();
+    assert_eq!(spaced.path, "System-designs.md");
+    assert_eq!(
+        fs::read_to_string(root.join("System-designs.md")).unwrap(),
+        "# System designs\n"
+    );
     for title in ["", "  ", "line\nbreak", "tab\there"] {
         code(backend.create(s, "bad.md", title, "body", &[]), "usage");
     }

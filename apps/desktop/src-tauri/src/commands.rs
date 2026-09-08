@@ -66,13 +66,12 @@ async fn save_note(
 async fn create_note(
     backend: State<'_, Arc<Backend>>,
     session: u64,
-    path: String,
     title: String,
     body: String,
     tags: Vec<String>,
 ) -> Result<Mutation> {
     let backend = backend.inner().clone();
-    mutation_blocking(move || backend.create(session, &path, &title, &body, &tags)).await
+    mutation_blocking(move || backend.create_from_title(session, &title, &body, &tags)).await
 }
 #[tauri::command]
 async fn move_note(

@@ -340,6 +340,16 @@ impl Backend {
             Mutation::from_commit(session, path, s.library.update(path, &expected, body))
         })
     }
+    pub fn create_from_title(
+        &self,
+        session: u64,
+        title: &str,
+        body: &str,
+        tags: &[String],
+    ) -> Result<Mutation> {
+        let path = notes_core::default_note_path(title).map_err(core_error)?;
+        self.create(session, &path, title, body, tags)
+    }
     pub fn create(
         &self,
         session: u64,
@@ -349,12 +359,7 @@ impl Backend {
         tags: &[String],
     ) -> Result<Mutation> {
         self.with_selection(session, |s| {
-            if title.trim().is_empty() || title.chars().any(char::is_control) {
-                return Err(mutation_error(
-                    "usage",
-                    "title must be a nonempty single line",
-                ));
-            }
+            notes_core::validate_note_title(title).map_err(core_error)?;
             // Like CLI new: supplied source wins; title supplies the empty-note heading.
             let initial;
             let body = if body.is_empty() {

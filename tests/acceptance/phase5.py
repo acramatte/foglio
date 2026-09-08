@@ -70,6 +70,7 @@ def main():
         (library/'stale.md').write_text('# Stale\n')
         (library/'missing.md').write_text('# Missing\n')
         (library/'mixed.md').write_bytes(b'A\r\nB\nC\r\nD')
+        (library/'long.md').write_text('# Long note\n\n' + 'A paragraph that makes the preview scroll.\n\n' * 80)
         env = {key:os.environ[key] for key in ('PATH','LANG','LD_LIBRARY_PATH') if key in os.environ}
         for key, folder in [('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_DATA_HOME','data'),('XDG_RUNTIME_DIR','runtime')]:
             p=sandbox/folder;p.mkdir(mode=0o700);env[key]=str(p)
@@ -103,22 +104,31 @@ def main():
                 click('[data-testid=source-mode]');edit(source());click('[data-testid=preview-mode]')
                 assert saved() and note.read_bytes()==original
                 assert js("return !!document.querySelector('article table') && !document.querySelector('article img')")
+                open_note('long.md')
+                assert js("const p=document.querySelector('[data-testid=preview]');return p.scrollHeight>p.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
+                assert js("const p=document.querySelector('[data-testid=preview]');p.scrollTop=200;return p.scrollTop>0")
+                scenarios.append('long preview scroll stays inside the note pane')
+                open_note('preserve.md')
                 click('[data-testid=source-mode]')
                 js("const e=document.querySelector('textarea');e.focus();const i=e.value.indexOf('untouched');e.setSelectionRange(i,i+'untouched'.length)")
                 driver.request('POST', f'/session/{driver.session}/actions', {'actions':[{'type':'key','id':'keyboard','actions':[{'type':'keyDown','value':'Z'},{'type':'keyUp','value':'Z'}]}]})
                 wait(saved,'autosaved preservation fixture')
                 expected=header+body.replace('untouched','Z').encode();assert note.read_bytes()==expected, (repr(note.read_bytes()), repr(expected), repr(source()))
                 scenarios.append('source roundtrip, BOM/CRLF/unknown YAML and unsupported syntax')
-                # Native keyboard toggle and save; actual WebDriver typing above exercises input path.
+                # Native keyboard toggle works in both directions, including when preview owns no focus.
                 js("document.querySelector('textarea').dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,bubbles:true}))")
                 assert js("return document.querySelector('textarea').hidden && !document.querySelector('article').hidden")
-                operation('new-note','nested/new.md');wait(lambda:(library/'nested/new.md').exists(),'created file')
-                wait(lambda:js("return document.querySelector('.metadata').textContent.includes('nested/new.md')"),'created path selected')
+                js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,bubbles:true}))")
+                assert js("return !document.querySelector('textarea').hidden && document.querySelector('article').hidden")
+                js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,bubbles:true}))")
+                assert js("return document.querySelector('textarea').hidden && !document.querySelector('article').hidden")
+                operation('new-note','System designs');wait(lambda:(library/'System-designs.md').exists(),'created file')
+                wait(lambda:js("return document.querySelector('.metadata').textContent.includes('System-designs.md')"),'created path selected')
                 edit('# Created\nBody from desktop\n');wait(saved,'new note autosave')
-                created=library/'nested/new.md';assert created.read_text()=='# Created\nBody from desktop\n'
+                created=library/'System-designs.md';assert created.read_text()=='# Created\nBody from desktop\n'
                 operation('tag-note','Project');wait(lambda:'tags: ["Project"]' in created.read_text(),'tag on disk')
                 wait(lambda:js("return document.querySelector('.metadata').textContent.includes('#Project')"),'tag selected')
-                operation('untag-note','Project');wait(lambda:'Project' not in created.read_text(),'tag removed')
+                operation('untag-note');wait(lambda:'Project' not in created.read_text(),'tag removed')
                 wait(saved,'tag acknowledgement');before=created.read_bytes()
                 operation('move-note','nested/renamed.md');renamed=library/'nested/renamed.md';wait(lambda:renamed.exists() and not created.exists(),'renamed file')
                 wait(lambda:js("return document.querySelector('.metadata').textContent.includes('nested/renamed.md')"),'rename path selected')

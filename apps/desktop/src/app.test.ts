@@ -13,11 +13,42 @@ function setup(overrides:Partial<Api> = {}) {
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
 describe("desktop UI state", () => {
+ it("toggles source and preview from either mode with the keyboard shortcut",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
+  expect(host.querySelector<HTMLElement>("[data-testid=preview]")!.hidden).toBe(false);
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
+  expect(source.hidden).toBe(false);
+ });
+ it("derives a portable filename from a new note title",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});
+  await app.start();host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  const input=host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!;
+  expect(input.labels?.[0]?.textContent).toBe("Note title");input.value="System designs";
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"System designs","",[]));
+ });
+ it("offers existing tags for removal and disables removal when none exist",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const tagged=note("a.md");tagged.tags=["work","urgent"];
+  const {host,api}=setup({open:vi.fn(async(_s,path)=>path==="a.md"?tagged:note(path)),tag:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]})});
+  await app.start();await app.open("a.md");host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!.click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  const select=host.querySelector<HTMLSelectElement>("select[data-testid=operation-value]")!;
+  expect([...select.options].map(option=>option.value)).toEqual(["work","urgent"]);select.value="urgent";
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.tag).toHaveBeenCalledWith(1,"a.md","hash","urgent",false));
+  await app.open("b.md");expect(host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!.disabled).toBe(true);
+ });
  it("retains the mutation lock through its follow-up open",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const opened=deferred<Note>();const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"one.md",revision:"r1",file_committed:true,warnings:[]}),open:vi.fn((_s,path)=>path==="one.md"?opened.promise:Promise.resolve(note(path)))});
   await app.start();await app.open("a.md");host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();
-  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!.value="one.md";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!.value="one";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
   await vi.waitFor(()=>expect(api.open).toHaveBeenCalledWith(1,"one.md"));host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();await Promise.resolve();
   expect(host.querySelector("dialog")).toBeNull();expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(true);
   opened.resolve(note("one.md"));await vi.waitFor(()=>expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(false));expect(api.create).toHaveBeenCalledOnce();

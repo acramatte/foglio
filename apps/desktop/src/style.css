@@ -14,11 +14,23 @@
 * {
   box-sizing: border-box;
 }
+html,
+body,
+#app {
+  height: 100%;
+}
 body {
   margin: 0;
+  overflow: hidden;
+}
+#app {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button {
@@ -29,6 +41,7 @@ button:disabled {
 }
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 summary:focus-visible,
 a:focus-visible {
   outline: 2px solid #3f7460;
@@ -75,7 +88,8 @@ header {
   width: 300px;
   max-width: 100%;
 }
-input {
+input,
+select {
   border: 1px solid #d4d8ce;
   border-radius: 6px;
   background: #fff;
@@ -103,8 +117,8 @@ input {
 .workspace {
   display: grid;
   grid-template-columns: 210px 310px minmax(0, 1fr);
-  height: calc(100vh - 216px);
-  min-height: 350px;
+  flex: 1;
+  min-height: 0;
 }
 .sidebar {
   padding: 22px 14px;
@@ -224,6 +238,8 @@ nav h3 {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   background: #fffefb;
 }
 .metadata {
@@ -244,6 +260,7 @@ nav h3 {
 }
 .preview {
   padding: 28px clamp(24px, 5vw, 70px) 60px;
+  min-height: 0;
   overflow: auto;
   line-height: 1.85;
   overflow-wrap: anywhere;
@@ -355,7 +372,7 @@ footer {
 dialog { color: inherit; background: #fffefb; border: 1px solid #d4d8ce; border-radius: 8px; max-width: 480px; padding: 24px; }
 dialog::backdrop { background: #29352f66; }
 dialog h2 { margin: 0 0 16px; font-size: 18px; }
-dialog label, dialog input { display: block; width: 100%; margin-bottom: 12px; }
+dialog label, dialog input, dialog select { display: block; width: 100%; margin-bottom: 12px; }
 dialog button { margin: 12px 8px 0 0; }
 @media (max-width: 1000px) {
   .workspace {

@@ -12,6 +12,29 @@ pub use library::{Library, Report};
 use serde::Serialize;
 use std::fmt;
 
+pub fn validate_note_title(title: &str) -> Result<()> {
+    if title.trim().is_empty() || title.chars().any(char::is_control) {
+        return Err(Error::new(
+            ErrorCode::Usage,
+            "title must be a nonempty single line",
+        ));
+    }
+    Ok(())
+}
+
+pub fn default_note_path(title: &str) -> Result<String> {
+    validate_note_title(title)?;
+    if title.contains(['/', '\\']) {
+        return Err(Error::new(
+            ErrorCode::Usage,
+            "title cannot contain path separators; use an explicit path",
+        ));
+    }
+    let path = format!("{}.md", title.replace(' ', "-"));
+    filesystem::relative(&path)?;
+    Ok(path)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {

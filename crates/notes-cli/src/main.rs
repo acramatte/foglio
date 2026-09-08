@@ -173,21 +173,10 @@ fn execute(cli: &Cli) -> Result<Output> {
             body,
             tags,
         } => {
-            if title.trim().is_empty() || title.contains(['\n', '\r']) {
-                return Err(Error::new(
-                    ErrorCode::Usage,
-                    "title must be a nonempty single line",
-                ));
-            }
-            if path.is_none() && title.contains(['/', '\\']) {
-                return Err(Error::new(
-                    ErrorCode::Usage,
-                    "title cannot contain path separators; use --path",
-                ));
-            }
+            notes_core::validate_note_title(title)?;
             let path = path
                 .clone()
-                .unwrap_or_else(|| format!("{}.md", title.replace(' ', "-")));
+                .map_or_else(|| notes_core::default_note_path(title), Ok)?;
             let e = lib.create(
                 &path,
                 &body.clone().unwrap_or_else(|| format!("# {title}\n")),

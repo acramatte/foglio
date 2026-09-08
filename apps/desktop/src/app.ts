@@ -52,6 +52,17 @@ export class App {
   private readonly metadata = element("div", "", "metadata");
   private readonly diagnostics = element("details", undefined, "diagnostics");
   private readonly count = element("span", "", "count");
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key.toLowerCase() === "s") {
+      event.preventDefault();
+      void this.editor?.flush();
+    }
+    if (event.key.toLowerCase() === "e") {
+      event.preventDefault();
+      this.setMode(this.mode === "source" ? "preview" : "source");
+    }
+  };
   constructor(
     private readonly host: HTMLElement,
     private readonly api: Api,
@@ -136,11 +147,7 @@ export class App {
     this.saveError.setAttribute("role","alert");
     this.retry.addEventListener("click",()=>{void this.editor?.retry();});
     reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.source, this.preview);
-    host.addEventListener("keydown",(event)=>{
-      if (!(event.ctrlKey || event.metaKey)) return;
-      if (event.key.toLowerCase()==="s") {event.preventDefault();void this.editor?.flush();}
-      if (event.key.toLowerCase()==="e") {event.preventDefault();this.setMode(this.mode==="source"?"preview":"source");}
-    });
+    this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
     this.diagnostics.dataset.testid = "diagnostics";
@@ -173,6 +180,7 @@ export class App {
   }
   stop(): void {
     this.stopped = true;
+    this.host.ownerDocument.removeEventListener("keydown", this.onKeyDown);
     this.editor?.dispose();
     clearInterval(this.timer);
     this.epoch++;
@@ -538,7 +546,7 @@ export class App {
     this.retry.hidden=editor?.status!=="save_error";
     this.source.readOnly=this.busy;
     for (const b of this.tools.querySelectorAll<HTMLButtonElement>("button")) {
-      b.disabled=this.busy;
+      b.disabled=this.busy || (b.dataset.testid==="untag-note" && !this.note?.tags.length);
       if (b.dataset.testid?.endsWith("-mode")) b.setAttribute("aria-pressed", String(b.dataset.testid===this.mode+"-mode"));
     }
     if (!editor) {this.saveError.textContent="";return;}
@@ -562,26 +570,32 @@ export class App {
     this.busy=true;this.renderEditor();
     try {await this.api.close();} catch(error) {this.report(error);this.busy=false;this.renderEditor();}
   }
-  private dialog(title: string, detail: string, field?: {label: string; value: string}, destructive = false): Promise<string | null> {
+  private dialog(title: string, detail: string, field?: {label: string; value: string; options?: string[]}, destructive = false): Promise<string | null> {
     return new Promise(resolve=>{
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
       const form=element("form");form.method="dialog";
       const heading=element("h2",title);heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
       form.append(heading,element("p",detail));
-      const input=element("input");
-      if (field) {const label=element("label",field.label);input.id="operation-value";input.dataset.testid="operation-value";input.value=field.value;input.required=true;label.htmlFor=input.id;form.append(label,input);}
+      const control=field?.options ? element("select") : element("input");
+      if (field) {
+        const label=element("label",field.label);control.id="operation-value";control.dataset.testid="operation-value";control.required=true;label.htmlFor=control.id;
+        if (control instanceof HTMLSelectElement) for (const value of field.options!) {
+          const option=element("option");option.value=value;option.textContent=value;control.append(option);
+        }
+        control.value=field.value;form.append(label,control);
+      }
       const cancel=element("button",field || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
       const finish=(value:string|null)=>{dialog.close();dialog.remove();resolve(value);};
       cancel.addEventListener("click",()=>finish(null));form.append(cancel);
       if (field || destructive) {const submit=element("button",destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
-      form.addEventListener("submit",event=>{event.preventDefault();finish(field?input.value:"");});
+      form.addEventListener("submit",event=>{event.preventDefault();finish(field?control.value:"");});
       dialog.addEventListener("cancel",event=>{event.preventDefault();finish(null);});
       dialog.append(form);this.host.append(dialog);dialog.showModal();
-      if (field) {input.focus();input.select();} else cancel.focus();
+      if (field) {control.focus();if (control instanceof HTMLInputElement) control.select();} else cancel.focus();
     });
   }
   private async mutate(action: "create" | "move" | "tag" | "untag" | "delete"): Promise<void> {
-    if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor)) return;
+    if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor) || (action==="untag" && !this.note?.tags.length)) return;
     this.busy=true;this.renderEditor();this.error.hidden=true;
     try {
       if (await this.editor?.flush() === false) {
@@ -591,10 +605,15 @@ export class App {
       const value=action==="delete"
         ? await this.dialog("Permanently delete note?",`Delete ${editor!.path} from disk? There is no undo.`,undefined,true)
         : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":action==="tag"?"Add tag":"Remove tag",
-          action==="create" || action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten." : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
-          {label:action==="create" || action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""});
+          action==="create" ? "Spaces in the title become hyphens in the Markdown filename. Existing files will never be overwritten."
+            : action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten."
+            : action==="untag" ? "Choose a tag currently attached to this note. Other frontmatter and the body stay unchanged."
+            : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
+          action==="untag"
+            ? {label:"Tag",value:this.note!.tags[0]!,options:this.note!.tags}
+            : {label:action==="create" ? "Note title" : action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""});
       if (value===null) return;
-      const result=action==="create" ? await this.api.create(session,value,value.split("/").at(-1)!.replace(/\.md$/, ""),"",[])
+      const result=action==="create" ? await this.api.create(session,value,"",[])
         : action==="move" ? await this.api.move(session,editor!.path,editor!.revision,value)
         : action==="delete" ? await this.api.delete(session,editor!.path,editor!.revision)
         : await this.api.tag(session,editor!.path,editor!.revision,value,action==="tag");
