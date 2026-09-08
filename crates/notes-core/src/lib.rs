@@ -7,7 +7,7 @@ pub mod library;
 pub mod search;
 pub mod watcher;
 pub use filesystem::LibraryRelativePath;
-pub use frontmatter::{Document, NoteId};
+pub use frontmatter::Document;
 pub use library::{Library, Report};
 use serde::Serialize;
 use std::fmt;
@@ -27,9 +27,7 @@ pub enum ErrorCode {
     Busy,
     Config,
     Committed,
-    Ambiguous,
     Skipped,
-    MissingId,
     NotFound,
     Incomplete,
     Usage,
@@ -50,9 +48,7 @@ impl ErrorCode {
             Self::Busy => "busy",
             Self::Config => "config",
             Self::Committed => "committed",
-            Self::Ambiguous => "ambiguous",
             Self::Skipped => "skipped",
-            Self::MissingId => "missing_id",
             Self::NotFound => "not_found",
             Self::Incomplete => "incomplete",
             Self::Usage => "usage",

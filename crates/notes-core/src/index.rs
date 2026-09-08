@@ -15,7 +15,6 @@ pub struct IndexStatus {
     pub discovered_notes: usize,
     pub indexed_notes: usize,
     pub stale_notes: usize,
-    pub ambiguous_notes: usize,
     pub parsed_notes: usize,
     pub reused_notes: usize,
     pub cache_rebuilt: bool,
@@ -26,7 +25,6 @@ pub struct IndexStatus {
 #[derive(Clone, PartialEq)]
 struct Cached {
     path: String,
-    id: String,
     title: String,
     body: String,
     tags_json: String,
@@ -52,6 +50,15 @@ fn corrupt(e: &rusqlite::Error) -> bool {
     matches!(e, rusqlite::Error::SqliteFailure(e, _) if matches!(e.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase))
 }
 fn connect(path: &Path) -> rusqlite::Result<Connection> {
+    // Reject future schemas before a writable connection can change journaling
+    // or checkpoint their WAL. The cooperative root lock covers this probe too.
+    let probe = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    probe.busy_timeout(Duration::from_millis(250))?;
+    let version: i64 = probe.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if !(0..=2).contains(&version) {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
+    drop(probe);
     let conn = Connection::open(path)?;
     conn.busy_timeout(Duration::from_millis(250))?;
     conn.execute_batch("PRAGMA foreign_keys=ON; PRAGMA trusted_schema=OFF; PRAGMA journal_mode=DELETE; PRAGMA synchronous=FULL;")?;
@@ -93,18 +100,25 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
         .mode(0o600)
         .open(path)?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    let mut obsolete_schema = false;
     let attempt = (|| -> rusqlite::Result<Connection> {
         let conn = connect(path)?;
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+        if version == 1 {
+            // Schema 1 encoded metadata IDs. Only discard this known old cache;
+            // unknown future versions must remain untouched and return an error.
+            obsolete_schema = true;
+            return Err(rusqlite::Error::InvalidQuery);
+        }
         if version == 0 {
             conn.execute_batch("BEGIN IMMEDIATE;")?;
-            conn.execute_batch(include_str!("../migrations/001_index.sql"))?;
+            conn.execute_batch(include_str!("../migrations/002_index.sql"))?;
             conn.execute_batch("COMMIT;")?;
-        } else if version != 1 {
+        } else if version != 2 {
             return Err(rusqlite::Error::InvalidQuery);
         }
         conn.prepare(
-            "SELECT path, id, title, body, tags_json, content_hash, fingerprint, stale FROM files",
+            "SELECT path, title, body, tags_json, content_hash, fingerprint, stale FROM files",
         )?;
         // Check actual health on every opening, including status/search. Otherwise
         // untouched FTS corruption could be mislabeled as a healthy warm index.
@@ -125,7 +139,7 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
     })();
     match attempt {
         Ok(conn) => Ok((conn, !existed)),
-        Err(e) if corrupt(&e) => {
+        Err(e) if obsolete_schema || corrupt(&e) => {
             // Every Foglio connection holds the same lock; no live app readers or WAL writers.
             secure_cache(path)?;
             for suffix in ["-journal", "-wal", "-shm", ""] {
@@ -256,14 +270,10 @@ impl Scan<'_> {
                 if fingerprint(&fs::symlink_metadata(&p)?) != fp {
                     return Err(Error::new(ErrorCode::Conflict, "file changed during scan"));
                 }
-                let id = doc
-                    .id
-                    .ok_or_else(|| Error::new(ErrorCode::MissingId, "run init to adopt"))?;
                 self.found.insert(
                     rel.clone(),
                     Cached {
                         path: rel.clone(),
-                        id: id.as_str().into(),
                         title: doc.title,
                         body: doc.body,
                         tags_json: serde_json::to_string(&doc.tags).unwrap(),
@@ -275,7 +285,7 @@ impl Scan<'_> {
                 Ok(())
             })();
             if let Err(e) = result {
-                let unknown = !matches!(e.code, ErrorCode::Skipped | ErrorCode::MissingId);
+                let unknown = !matches!(e.code, ErrorCode::Skipped);
                 self.diagnostic(rel, e, unknown);
             }
         }
@@ -312,7 +322,7 @@ impl Library {
         self.reconcile_locked(false, false)
             .map(|(_, status)| status)
     }
-    /// Hash and parse every note; does not adopt or rewrite Markdown.
+    /// Hash and parse every note; does not rewrite Markdown.
     pub fn rescan(&self) -> Result<IndexStatus> {
         let _lock = self.lock()?;
         self.reconcile_locked(true, false).map(|(_, status)| status)
@@ -331,20 +341,19 @@ impl Library {
         let old: HashMap<String, Cached> = {
             let mut stmt = conn
                 .prepare(
-                    "SELECT path,id,title,body,tags_json,content_hash,fingerprint,stale FROM files",
+                    "SELECT path,title,body,tags_json,content_hash,fingerprint,stale FROM files",
                 )
                 .map_err(db_error)?;
             let rows = stmt
                 .query_map([], |r| {
                     Ok(Cached {
                         path: r.get(0)?,
-                        id: r.get(1)?,
-                        title: r.get(2)?,
-                        body: r.get(3)?,
-                        tags_json: r.get(4)?,
-                        hash: r.get(5)?,
-                        fingerprint: r.get(6)?,
-                        stale: r.get(7)?,
+                        title: r.get(1)?,
+                        body: r.get(2)?,
+                        tags_json: r.get(3)?,
+                        hash: r.get(4)?,
+                        fingerprint: r.get(5)?,
+                        stale: r.get(6)?,
                     })
                 })
                 .map_err(db_error)?;
@@ -375,30 +384,13 @@ impl Library {
                 scan.found.insert(path.clone(), stale);
             }
         }
-        let mut ids: HashMap<&str, usize> = HashMap::new();
-        for c in scan.found.values() {
-            *ids.entry(&c.id).or_default() += 1;
-        }
-        let identity_unknown = !scan.unknown.is_empty();
         let mut eligible = HashSet::new();
         for c in scan.found.values() {
             if c.stale {
                 scan.status.stale_notes += 1;
-            }
-            if ids[c.id.as_str()] > 1 {
-                scan.status.ambiguous_notes += 1;
-                scan.status.diagnostics.push(Diagnostic {
-                    path: c.path.clone(),
-                    code: ErrorCode::Ambiguous,
-                    message: "duplicate id: every member excluded from search".into(),
-                });
-            } else if !c.stale && !identity_unknown {
+            } else {
                 eligible.insert(c.path.clone());
             }
-        }
-        // Unknown identity anywhere can conceal a duplicate of any otherwise-valid note.
-        if identity_unknown {
-            scan.status.diagnostics.push(Diagnostic { path:String::new(), code:ErrorCode::Incomplete, message:"identity map incomplete; search eligibility paused until reconciliation succeeds".into() });
         }
         let tx = conn.transaction().map_err(db_error)?;
         if rebuild {
@@ -418,7 +410,7 @@ impl Library {
                     .map_err(db_error)?;
             }
         }
-        // Delete affected old identities first, allowing paths and IDs to swap atomically.
+        // Delete affected old identities first, allowing paths to swap atomically.
         for path in &previous {
             if !eligible.contains(path) || old.get(path) != scan.found.get(path) {
                 tx.execute("DELETE FROM notes WHERE path=?1", [path])
@@ -428,10 +420,9 @@ impl Library {
         for c in scan.found.values() {
             if rebuild || old.get(&c.path) != Some(c) {
                 tx.execute(
-                    "INSERT OR REPLACE INTO files VALUES(?1,?2,?3,?4,?5,?6,?7,?8)",
+                    "INSERT OR REPLACE INTO files VALUES(?1,?2,?3,?4,?5,?6,?7)",
                     params![
                         c.path,
-                        c.id,
                         c.title,
                         c.body,
                         c.tags_json,
@@ -446,19 +437,19 @@ impl Library {
                 && (rebuild || !previous.contains(&c.path) || old.get(&c.path) != Some(c))
             {
                 tx.execute(
-                    "INSERT INTO notes VALUES(?1,?2,?3,?4)",
-                    params![c.id, c.path, c.title, c.hash],
+                    "INSERT INTO notes VALUES(?1,?2,?3)",
+                    params![c.path, c.title, c.hash],
                 )
                 .map_err(db_error)?;
                 let tags: Vec<String> = serde_json::from_str(&c.tags_json)
                     .map_err(|e| Error::new(ErrorCode::Index, e))?;
                 for tag in &tags {
-                    tx.execute("INSERT INTO tags VALUES(?1,?2)", params![c.id, tag])
+                    tx.execute("INSERT INTO tags VALUES(?1,?2)", params![c.path, tag])
                         .map_err(db_error)?;
                 }
                 tx.execute(
-                    "INSERT INTO notes_fts(note_id,title,body,path,tags) VALUES(?1,?2,?3,?4,?5)",
-                    params![c.id, c.title, c.body, c.path, tags.join(" ")],
+                    "INSERT INTO notes_fts(note_path,title,body,path,tags) VALUES(?1,?2,?3,?4,?5)",
+                    params![c.path, c.title, c.body, c.path, tags.join(" ")],
                 )
                 .map_err(db_error)?;
             }
@@ -479,22 +470,15 @@ impl Library {
         let _lock = self.lock()?;
         let (conn, status) = self.reconcile_locked(true, false)?;
         let mut stmt = conn
-            .prepare("SELECT id,path,content_hash FROM notes ORDER BY path")
+            .prepare("SELECT path,content_hash FROM notes ORDER BY path")
             .map_err(db_error)?;
         let rows = stmt
-            .query_map([], |r| {
-                Ok((
-                    r.get::<_, String>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, String>(2)?,
-                ))
-            })
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
             .map_err(db_error)?;
         let mut notes = Vec::new();
         for row in rows {
-            let (id, path, hash) = row.map_err(db_error)?;
+            let (path, hash) = row.map_err(db_error)?;
             notes.push(crate::events::WatchedNote {
-                id: crate::NoteId::parse(&id)?,
                 path,
                 revision: crate::Revision(hash),
             });

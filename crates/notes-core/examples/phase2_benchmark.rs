@@ -14,9 +14,8 @@ fn main() {
     for i in 0..count {
         let folder = lib.root().join(format!("folder{:02}/nested", i % 50));
         fs::create_dir_all(&folder).unwrap();
-        let id = ulid::Ulid::from(i as u128 + 1);
         let source = format!(
-            "---\nid: '{id}'\ntags: [Work, topic{}]\n---\n# Synthetic note {i}\n\nCafé 日本語 lexical benchmark bucket{}\n\n- [ ] task\n\n| key | value |\n| --- | --- |\n| index | {i} |\n\n```rust\nlet value = {i};\n```\n{}",
+            "---\ntags: [Work, topic{}]\n---\n# Synthetic note {i}\n\nCafé 日本語 lexical benchmark bucket{}\n\n- [ ] task\n\n| key | value |\n| --- | --- |\n| index | {i} |\n\n```rust\nlet value = {i};\n```\n{}",
             i % 20,
             i % 100,
             "Ordinary synthetic Markdown paragraph.\n".repeat(4 + i % 12)

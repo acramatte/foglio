@@ -46,33 +46,8 @@ fn field_comments(source: &str, newline: &str) -> String {
     }
     comments
 }
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
-pub struct NoteId(String);
-impl NoteId {
-    pub fn parse(s: &str) -> Result<Self> {
-        if s.len() != 26
-            || !matches!(s.as_bytes()[0], b'0'..=b'7')
-            || !s
-                .bytes()
-                .all(|b| b"0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(&b))
-        {
-            return Err(Error::new(
-                ErrorCode::Metadata,
-                "id must be a canonical full ULID",
-            ));
-        }
-        Ok(Self(s.into()))
-    }
-    pub fn generate() -> Self {
-        Self(ulid::Ulid::new().to_string())
-    }
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
 #[derive(Debug, Clone, Serialize)]
 pub struct Document {
-    pub id: Option<NoteId>,
     pub tags: Vec<String>,
     pub body: String,
     pub source: String,
@@ -105,7 +80,6 @@ impl Document {
         let mut header = None;
         let mut body_start = bom;
         let mut fields = Vec::new();
-        let mut id = None;
         let mut tags = Vec::new();
         let first = source[bom..].split_inclusive('\n').next().unwrap_or("");
         if first.trim_end_matches(['\r', '\n']) == "---" {
@@ -182,11 +156,6 @@ impl Document {
                     Error::new(ErrorCode::Metadata, "frontmatter must be a mapping")
                 })?
             };
-            if let Some(v) = map.get(Value::String("id".into())) {
-                id = Some(NoteId::parse(v.as_str().ok_or_else(|| {
-                    Error::new(ErrorCode::Metadata, "id must be string")
-                })?)?);
-            }
             if let Some(v) = map.get(Value::String("tags".into())) {
                 for t in v.as_sequence().ok_or_else(|| {
                     Error::new(ErrorCode::Metadata, "tags must be string sequence")
@@ -265,7 +234,6 @@ impl Document {
             title = fallback.into();
         }
         Ok(Self {
-            id,
             tags,
             body,
             revision: revision(bytes),
@@ -276,9 +244,6 @@ impl Document {
             body_start,
             newline,
         })
-    }
-    pub fn with_id(&self, id: &NoteId) -> String {
-        self.patch("id", id.as_str())
     }
     pub fn with_tags(&self, tags: &[String]) -> String {
         self.patch(

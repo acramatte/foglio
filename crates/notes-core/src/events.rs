@@ -1,10 +1,9 @@
 //! Body-free, generation-stamped invalidations. Refetch disk before mutation.
-use crate::{NoteId, Revision, library::Diagnostic};
+use crate::{Revision, library::Diagnostic};
 use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct WatchedNote {
-    pub id: NoteId,
     pub path: String,
     pub revision: Revision,
 }
@@ -21,11 +20,6 @@ pub enum EventKind {
     },
     NoteChanged {
         note: WatchedNote,
-        previous_revision: Revision,
-    },
-    NoteMoved {
-        note: WatchedNote,
-        from: String,
         previous_revision: Revision,
     },
     NoteDeleted {

@@ -20,8 +20,6 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[2]
 BINARY = Path(os.environ.get("FOGLIO_DESKTOP_BINARY", ROOT / "target/debug/foglio-desktop"))
 DRIVER = os.environ.get("TAURI_DRIVER", "tauri-driver")
-ID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-OTHER_ID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
 
 
 def port():
@@ -113,7 +111,7 @@ def main():
         (library / "Empty").mkdir()
         note = library / "Projects/first.md"
         note.write_text(f'''---
-id: {ID}
+id: user-metadata
 tags: [work]
 ---
 # Native preview
@@ -136,8 +134,8 @@ tags: [work]
 [Bad](javascript:window.foglioInjected=true)
 [Outside](../../outside.md)
 ''')
-        (library / "second.md").write_text(f"---\nid: {OTHER_ID}\n---\n# Second note\nUniqueSearchTerm\n")
-        (library / "unadopted.md").write_text("# Imported without ID\n")
+        (library / "second.md").write_text("# Second note\nUniqueSearchTerm\n")
+        (library / "plain.md").write_text("# Imported without ID\n")
         (sandbox / "outside.md").write_text("OUTSIDE MUST NOT BE READ")
         before = {str(p.relative_to(library)): p.read_bytes() for p in library.rglob("*.md")}
         env = {key: os.environ[key] for key in ("PATH", "LANG", "LD_LIBRARY_PATH") if key in os.environ}
@@ -157,13 +155,17 @@ tags: [work]
                 driver.fill("[data-testid=root-path]", str(library))
                 driver.js("document.querySelector('[data-testid=select-library]').click()")
                 wait(lambda: driver.js("return document.body.textContent.includes('Native preview')"), "notes loaded")
-                assert before == {str(p.relative_to(library)): p.read_bytes() for p in library.rglob("*.md")}, "selection adopted/modified notes"
+                assert before == {str(p.relative_to(library)): p.read_bytes() for p in library.rglob("*.md")}, "selection modified notes"
                 state = driver.invoke("desktop_state")["value"]
                 session = state["session"]
                 assert state["root"] == str(library) and state["watcher_active"], state
                 browse = driver.invoke("browse_library", {"session": session})
                 assert browse["ok"], browse
                 assert "Empty" in browse["value"]["folders"], "physical empty folder missing"
+                assert {n["path"] for n in browse["value"]["notes"]} == {"Projects/first.md", "second.md", "plain.md"}
+                assert not browse["value"]["incomplete"]
+                assert driver.invoke("open_note", {"session": session, "path": "plain.md"})["ok"]
+                assert driver.js("return !document.querySelector('header .status') && document.querySelector('footer .status').textContent === 'Monitoring external changes'")
                 driver.js("Array.from(document.querySelectorAll('[data-testid=note-list] button')).find(e=>e.textContent.includes('Native preview')).click()")
                 wait(lambda: driver.js("return !!document.querySelector('[data-testid=preview] table')"), "GFM table in actual webview")
                 assert driver.js("return !window.foglioInjected && !document.querySelector('[data-testid=preview] img, [data-testid=preview] script, [data-testid=preview] iframe')"), "unsafe preview DOM"
@@ -176,38 +178,45 @@ tags: [work]
                 driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='Empty').click()")
                 wait(lambda: driver.js("return document.querySelector('[data-testid=note-list]').textContent.includes('No matching notes')"), "empty physical folder filter")
                 driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='All notes').click()")
-                driver.js("document.querySelector('[data-note-id=\"'+arguments[0]+'\"]').click()", ID)
+                driver.js("document.querySelector('[data-note-path=\"Projects/first.md\"]').click()")
                 wait(lambda: driver.js("return !!document.querySelector('[data-testid=preview] table')"), "return to original note")
                 assert not driver.invoke("resolve_note_link", {"session": session, "fromPath": "Projects/first.md", "target": "../../outside.md"})["ok"]
                 assert not driver.invoke("open_external_link", {"url": "javascript:alert(1)"})["ok"]
-                assert not driver.invoke("open_note", {"session": session, "id": "../outside.md"})["ok"]
+                assert not driver.invoke("open_note", {"session": session, "path": "../outside.md"})["ok"]
                 driver.fill("[data-testid=search-input]", "UniqueSearchTerm")
                 wait(lambda: driver.js("return document.querySelector('[data-testid=note-list]').textContent.includes('Second note') && !document.querySelector('[data-testid=note-list]').textContent.includes('Native preview')"), "native FTS search")
                 driver.fill("[data-testid=search-input]", "")
                 wait(lambda: driver.js("return document.querySelector('[data-testid=note-list]').textContent.includes('Native preview')"), "clear search")
                 subprocess.run(["python3", "-c", "import pathlib,sys;p=pathlib.Path(sys.argv[1]);p.write_text(p.read_text().replace('Native preview','External refresh'));p.rename(p.with_name('renamed.md'))", str(note)], check=True)
-                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External refresh')"), "watcher refresh after external move/edit")
-                current = driver.invoke("open_note", {"session": session, "id": ID})
+                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('Note unavailable')"), "external move leaves old selection missing")
+                assert not driver.invoke("open_note", {"session": session, "path": "Projects/first.md"})["ok"]
+                current = driver.invoke("open_note", {"session": session, "path": "Projects/renamed.md"})
                 assert current["ok"] and current["value"]["path"] == "Projects/renamed.md", current
+                wait(lambda: driver.js("return !!document.querySelector('[data-note-path=\"Projects/renamed.md\"]')"), "renamed path listed")
+                driver.js("document.querySelector('[data-note-path=\"Projects/renamed.md\"]').click()")
+                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External refresh')"), "explicitly open renamed path")
                 renamed = library / "Projects/renamed.md"
                 copy = library / "conflict.md"
                 shutil.copyfile(renamed, copy)
-                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('Note unavailable') && document.querySelector('[data-testid=diagnostics]').textContent.toLowerCase().includes('ambiguous')"), "duplicate conflict surfaced")
+                wait(lambda: driver.js("return !!document.querySelector('[data-note-path=\"conflict.md\"]')"), "identical copy independently listed")
                 assert copy.read_bytes() == renamed.read_bytes()
+                assert driver.invoke("open_note", {"session": session, "path": "conflict.md"})["ok"]
+                assert driver.js("return !document.querySelector('[data-testid=diagnostics]').textContent.toLowerCase().includes('ambiguous')")
                 copy.unlink()
-                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External refresh')"), "duplicate recovery")
+                renamed.write_text(renamed.read_text().replace('External refresh', 'External second edit'))
+                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External second edit')"), "same-path external edit reloads")
                 renamed.chmod(0)
                 try:
                     wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('Note unavailable')"), "unreadable note surfaced")
                 finally:
                     renamed.chmod(0o600)
-                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External refresh')"), "permission recovery")
+                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('External second edit')"), "permission recovery")
                 renamed.unlink()
-                wait(lambda: driver.js("return !document.querySelector('[data-testid=preview]').textContent.includes('External refresh')"), "deleted selection is cleared")
+                wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('Note unavailable')"), "deleted selection is cleared")
                 driver.close()
                 driver.start()
                 wait(lambda: driver.js("return document.body.textContent.includes('Second note')"), "persisted root reopened")
-                assert (library / "unadopted.md").read_bytes() == before["unadopted.md"]
+                assert (library / "plain.md").read_bytes() == before["plain.md"]
                 assert not requests, requests
                 driver.close()
                 print("PASS: actual Tauri onboarding, readonly selection, folders, GFM/security, search, watcher move/edit/delete, close/reopen")

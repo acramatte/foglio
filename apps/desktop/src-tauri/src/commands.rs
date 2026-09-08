@@ -34,9 +34,9 @@ async fn search_notes(
     blocking(move || backend.search(session, query, tag, folder)).await
 }
 #[tauri::command]
-async fn open_note(backend: State<'_, Arc<Backend>>, session: u64, id: String) -> Result<Note> {
+async fn open_note(backend: State<'_, Arc<Backend>>, session: u64, path: String) -> Result<Note> {
     let backend = backend.inner().clone();
-    blocking(move || backend.open(session, &id)).await
+    blocking(move || backend.open(session, &path)).await
 }
 #[tauri::command]
 async fn resolve_note_link(

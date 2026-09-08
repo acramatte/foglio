@@ -13,13 +13,17 @@ Requirements: [product](specs/product.md). Contracts: [technical](specs/technica
 | Phase | Deliverable | Depends on | Completion gate | Explicitly excluded |
 |---|---|---|---|---|
 | 0 — Bootstrap | Workspace, core/CLI crates, toolchain, lint/test CI, project conventions | D09/D18 review | Core and real CLI compile; workspace tests, formatting and strict Clippy run in CI | Product subsystems |
-| 1 — Filesystem core + CLI | Root selection, discovery/adoption, metadata, stable IDs, guarded CRUD/move/tags, lifecycle CLI | Phase 0; S01/S02 | Black-box lifecycle plus source §43's five invariants and destructive/stale-write safety pass on actual temporary files | DB, search, watcher, desktop |
+| 1 — Filesystem core + CLI | Root selection, read-only discovery, optional tags, path identity, guarded CRUD/move/tags, lifecycle CLI | Phase 0; S01/S02 | Black-box lifecycle plus source §43's five invariants and destructive/stale-write safety pass on actual temporary files | DB, search, watcher, desktop |
 | 2 — Index + search | SQLite migrations, transactional derived state, FTS, status/rescan/reindex, baseline measurements | Phase 1 | Remove cache, rebuild, compare files and searchable state; corrupted DB and multi-process cache tests pass | UI, background daemon |
 | 3 — Live reconciliation | Recursive watcher, batching, subtree handling, in-process events, recovery | Phase 2 | A separate process creates/edits/moves/deletes notes; running core converges without event-order assumptions | Sync integrations |
 | 4 — Read-only desktop | Tauri lifetime, selection, folders/notes/tags, search, sanitized preview | Phase 3 | Actual desktop navigates an existing root; safe renderer tests and command boundaries pass | Rich editor/autosave |
 | 5 — Editing | Source/preview editor, autosave state machine, create/move/delete/tags, navigation protection | Phase 4; S03 | Real desktop creates/edits files; failed/stale saves preserve buffer; rendering and metadata round trips pass | Automatic merge |
 | 6 — External-change UX | Clean reload, dirty conflict pause/choices, moved/deleted note handling | Phase 5 | Two-process edit during autosave cannot silently discard either observed version; deletion is not undone by autosave | History, CRDTs |
 | 7 — Release hardening | Doctor, keyboard/accessibility/error polish, performance, packaging, external-sync docs | Phase 6 | Complete source §37 workflow and release/security/platform evidence, including fresh install | New roadmap features |
+
+## Accepted ordinary-Markdown amendment
+
+D26 removes embedded-ID semantics across core/index/CLI/watch/desktop before Phase 5. Paths locate documents and hashes protect revisions. D27 moves monitoring to a quiet footer. Search UX remains deferred, and desktop creation/editing stays Phase 5. See [path identity](path-identity.md).
 
 ## Critical path and parallel work
 
@@ -58,7 +62,7 @@ cargo test --workspace --all-features
 
 Once desktop exists, add frontend type checking, renderer/editor tests, production build, Tauri backend tests, and an actual desktop smoke test. P4-01 selects the package manager/scripts and documents exact commands; no fictitious `npm` scripts are claimed today. Run core/CLI tests independently of Tauri native dependencies even if a workspace-wide job covers desktop on equipped runners.
 
-Phase 1 demonstration uses an isolated temporary configuration and temporary library, builds and runs the actual `notes` executable, then checks files. Show generated full IDs from real execution rather than hard-coded illustrative ULIDs. No production notes are used for tests.
+Phase 1 demonstration uses an isolated temporary configuration and temporary library, builds and runs the actual `notes` executable, then checks files. Verify literal paths, plain creation and complete byte preservation on selection/init. No production notes are used for tests.
 
 ## Pull request boundaries
 

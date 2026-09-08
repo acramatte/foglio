@@ -58,25 +58,17 @@ fn independent_writer_overlaps_startup_and_domain_deltas_match_disk() {
         _ => unreachable!(),
     }
     fs::rename(lib.root().join("a.md"), lib.root().join("b.md")).unwrap();
-    let moved = await_event(&sub, |kind| matches!(kind, EventKind::NoteMoved { .. }));
-    match moved {
-        EventKind::NoteMoved {
-            note,
-            from,
-            previous_revision,
-        } => {
-            assert_eq!(from, "a.md");
-            assert_eq!(note.path, "b.md");
-            assert_eq!(note.id, old.id);
-            assert_eq!(note.revision, previous_revision);
-        }
-        _ => unreachable!(),
-    }
+    let removed = await_event(&sub, |kind| matches!(kind, EventKind::NoteDeleted { .. }));
+    assert!(
+        matches!(removed, EventKind::NoteDeleted { note } if note.path == "a.md" && note.revision == revision(bytes.as_bytes()))
+    );
+    let created = await_event(&sub, |kind| matches!(kind, EventKind::NoteCreated { .. }));
+    assert!(
+        matches!(created, EventKind::NoteCreated { note } if note.path == "b.md" && note.revision == revision(bytes.as_bytes()))
+    );
     fs::remove_file(lib.root().join("b.md")).unwrap();
     let deleted = await_event(&sub, |kind| matches!(kind, EventKind::NoteDeleted { .. }));
-    assert!(
-        matches!(deleted, EventKind::NoteDeleted { note } if note.id == old.id && note.path == "b.md")
-    );
+    assert!(matches!(deleted, EventKind::NoteDeleted { note } if note.path == "b.md"));
     assert!(watcher.snapshot().notes.is_empty());
     watcher.shutdown().unwrap();
 }

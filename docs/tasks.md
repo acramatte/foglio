@@ -43,9 +43,9 @@ Do not check a box just because code exists. The source brief's illustrative exa
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
 | [x] | P1-01 | P0-03 | Implement library/config resolution, path types and recursive discovery in `library.rs`/`filesystem.rs`; resolve D10/D11 | Repeated init preserves contents; shared config resolves selected root; paths cannot escape; non-note/symlink/unsupported inputs diagnosed (V02, V07) |
-| [x] | P1-02 | P1-01 | Run S01; implement validated `NoteId`, frontmatter/body parser, title extraction, tag semantics; preservation fixtures under `crates/notes-core/tests/fixtures/` | Valid ULIDs and both tag forms parse; malformed/duplicate-key/wrong-type metadata stays byte-identical; unknown nested keys/comments/body/BOM/CRLF survive supported patches (V03, V04) |
+| [x] | P1-02 | P1-01 | Run S01; implement frontmatter/body parser, title extraction, tag semantics; preservation fixtures under `crates/notes-core/tests/fixtures/` | Plain Markdown, arbitrary user `id` metadata and both tag forms parse; malformed/duplicate-key/wrong-type metadata stays byte-identical; unknown nested keys/comments/body/BOM/CRLF survive supported patches (V03, V04) |
 | [x] | P1-03 | P1-02 | Run S02; implement revision preconditions, cooperative lock, staging/flush/replace, no-clobber create/move, explicit commit outcomes | Fault and stale-write tests inspect disk; occupied targets remain unchanged; permissions preserved; external-writer race/platform limits documented (V06, V07, V08) |
-| [x] | P1-04 | P1-03 | Implement safe missing-ID adoption, full discovery diagnostics, duplicate-group policy in core | Imported body survives; read-only/unstable inputs not overwritten; every duplicate member is ambiguous; no silent ID regeneration (V04, V05) |
+| [x] | P1-04 | P1-03 | Implement byte-preserving initialization/discovery and independent path identity in core (D26 supersedes adoption) | All existing Markdown bytes survive init; read-only inputs stay readable; identical content/metadata at different paths remains independent (V04, V05) |
 | [x] | P1-05 | P1-04 | Implement create/get/list/update/move/delete/add-tag/remove-tag domain APIs | Actual temp-filesystem lifecycle, stable move identity, metadata-only tag edits, body updates, stale mutation rejection pass (V06, V08) |
 | [x] | P1-06 | P1-05 | Implement `init/new/list/show/move/delete/tags/tag add/tag remove`, selectors, config override, JSON/errors/help; resolve D15/D20 | Black-box executable lifecycle works; delete confirmation/noninteractive behavior deterministic; stdout/stderr/exit codes tested; no sync/index stubs (V09) |
 | [x] | P1-07 | P1-06 | Add first-delivery acceptance harness and user documentation; reconcile phase status | Source §43's five checks pass automatically, safety suites pass, deleting config leaves notes intact and root reselection works; Phase 0–1 full gate recorded (V01–V10) |
@@ -66,7 +66,7 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [x] | P2-01 | P1-07 | Implement `index.rs`, migrations, FTS5 availability check, cache lifecycle, complete scan/transactional index updates | Scan/edit/move/delete reflected atomically; DB deletion/corruption rebuild preserves notes; inaccessible subtree is not interpreted as empty; duplicates excluded (V11, V12) |
+| [x] | P2-01 | P1-07 | Implement `index.rs`, migrations, FTS5 availability check, cache lifecycle, complete scan/transactional index updates | Scan/edit/move/delete reflected atomically; DB deletion/corruption rebuild preserves notes; inaccessible subtree is not interpreted as empty; healthy paths remain searchable during partial scans (V11, V12) |
 | [x] | P2-02 | P2-01 | Implement `search.rs`, parameterized literal/phrase/prefix queries, ranking, tag/folder filters; resolve D16 | Every indexed field searchable; malformed/hostile query safe; deterministic ordering and component-aware paths (V13) |
 | [x] | P2-03 | P2-02 | Add CLI `search/rescan/reindex/status`; distinguish file-commit/index-degraded results and short-lived watcher state | Reindex reconstructs complete healthy state or explicitly reports partial diagnostics; status counts reflect actual scan/index state; CLI status does not claim background watcher (V11, V12, V14) |
 | [x] | P2-04 | P2-02, P2-03 | Validate multiple processes/locking and S05 initial fixture/benchmark harness; optimize warm-open only with evidence | Concurrent app writers/rebuild/readers have bounded deterministic outcomes; warm scan avoids unconditional reparsing; baseline at both corpus sizes saved with environment (V15, V25) |
@@ -102,9 +102,9 @@ Do not check a box just because code exists. The source brief's illustrative exa
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
 | [x] | P4-01 | P3-03 | Create `apps/desktop` Tauri/TypeScript app; select frontend framework/package manager; shared core lifetime, narrow DTOs, capability/CSP setup, frontend CI | Production frontend/Tauri build; actual window opens; core tests remain independently runnable; commands do not block UI under scan load (V18) |
-| [x] | P4-02 | P4-01 | Implement selected-library onboarding, physical folder tree, notes/tags, opening, search and empty/error states | Real fixture root navigable; selections identify notes by ID, paths shown correctly; search/tag results open current disk content (V18) |
+| [x] | P4-02 | P4-01 | Implement selected-library onboarding, physical folder tree, notes/tags, opening, search and empty/error states | Real fixture root navigable; selections identify notes by relative path, paths shown correctly; search/tag results open current disk content (V18) |
 | [x] | P4-03 | P4-01 | Implement sanitized CommonMark/GFM preview, link policy, unsupported image fallback and security fixtures | Required Markdown renders; scripts/schemes/local traversal/remote image loads blocked in actual webview, original Markdown unchanged (V19) |
-| [x] | P4-04 | P4-02, P4-03 | Wire watcher invalidation to lists/preview with error handling and lifecycle cleanup | External changes reflected while browsing; duplicate/unreadable/deleted records surfaced; close/reopen releases watchers cleanly (V18, V19) |
+| [x] | P4-04 | P4-02, P4-03 | Wire watcher invalidation to lists/preview with error handling and lifecycle cleanup | External changes reflected while browsing; unreadable/deleted records surfaced; identical copies independently accessible; close/reopen releases watchers cleanly (V18, V19) |
 
 ## Phase 4 execution evidence
 
@@ -115,31 +115,43 @@ Do not check a box just because code exists. The source brief's illustrative exa
 - **Review/decisions:** plain TypeScript/Vite/npm, Tauri 2, Marked/DOMPurify allowlist, narrow IPC and read-only selection. Fixed review findings for navigation during refresh and frontend/backend link-policy disagreement; added regression tests. [Detailed setup, architecture and evidence](phase4.md).
 - **Limitations:** hosted CI pending; Linux/WebKit/Xvfb only, no manual accessibility or physical-display evidence, installers, other OSes, cross-device sync or large-corpus performance claims. Existing whole-library scan behavior remains visible and P7 performance work remains open.
 
+## Ordinary-Markdown amendment (D26–D28)
+
+- [x] Remove embedded-ID types/selectors/DTOs, adoption and duplicate-ID suppression; path-key the disposable schema-2 cache and preserve SHA-256 stale-write guards.
+- [x] Browse/search/open supported plain Markdown and preserve arbitrary existing `id` metadata. Init/select/index/watch never rewrite source; untagged creation is plain Markdown.
+- [x] Keep external moves as delete/create observations; never retarget selection using matching content. Move healthy monitoring to a quiet footer, preserving visible errors.
+- **Evidence:** [path identity](path-identity.md). Workspace tests/strict Clippy, CLI acceptance (12 + 4), frontend tests (18), typecheck, optimized native build and actual WebKit acceptance passed locally. Nothing committed or pushed for this amendment.
+- **Scope:** search UX remains unchanged. Desktop creation/editing/autosave remains Phase 5.
+
 ## Phase 5 — Editor and autosave
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
 | [ ] | P5-01 | P4-04 | Run S03 editor round-trip spike; record D17; implement source/preview baseline and optional proven rich mode | Markdown fixtures preserve unsupported syntax and unknown frontmatter; rich mode omitted if preservation fails (V20) |
 | [ ] | P5-02 | P5-01 | Implement per-note debounced autosave state machine, generation/revision tracking, save error UI and stale-save pause | Edits during in-flight saves not marked saved prematurely; stale core write cannot overwrite newer disk; unsaved buffer survives save failure (V21) |
-| [ ] | P5-03 | P5-02 | Add desktop create/move/rename/delete/tag controls using core; explicit permanent-delete confirmation | End-to-end desktop file lifecycle and stable identity pass; no frontend filesystem reimplementation (V22) |
+| [ ] | P5-03 | P5-02 | Add desktop create/move/rename/delete/tag controls using core; explicit permanent-delete confirmation | End-to-end desktop file lifecycle and explicit selected-path updates pass; no frontend filesystem reimplementation (V22) |
 | [ ] | P5-04 | P5-02 | Protect switching notes, navigation and window close with pending saves; keyboard source/preview affordances | Navigation flushes or stays/cancels with explicit choice; close cannot silently discard known dirty buffer; manual smoke plus automated state tests (V20, V21) |
 
 ## Phase 6 — External-change experience
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P6-01 | P5-03, P5-04 | Define/implement clean refresh, dirty/saving conflict and missing-note states; resolve D19 | External update reloads clean note; dirty/in-flight edit pauses; external move keeps identity and deletion does not trigger recreation (V23) |
-| [ ] | P6-02 | P6-01 | Implement explicit reload/discard and save-local-as-new conflict choices; repeated-change guards | Disk and local versions never silently discarded; save-copy uses new ID; repeated external changes remain guarded (V23) |
-| [ ] | P6-03 | P6-02 | Run two-process end-to-end conflict and externally synchronized conflict-copy scenarios | Dirty edit + external write/move/delete and copied duplicate IDs preserve content and surface ambiguity in running desktop (V23, V24) |
+| [ ] | P6-01 | P5-03, P5-04 | Define/implement clean refresh, dirty/saving conflict and missing-note states; resolve D19 | External update reloads clean note; dirty/in-flight edit pauses; external moves leave the old path missing unless reliably observed; no hash retargeting or implicit recreation (V23) |
+| [ ] | P6-02 | P6-01 | Implement explicit reload/discard and save-local-as-new conflict choices; repeated-change guards | Disk and local versions never silently discarded; save-copy uses a new no-clobber path; repeated external changes remain guarded (V23) |
+| [ ] | P6-03 | P6-02 | Run two-process end-to-end conflict and externally synchronized conflict-copy scenarios | Dirty edit + external write/move/delete and identical conflict copies preserve independent content without hash-based retargeting in running desktop (V23, V24) |
 
 ## Phase 7 — Diagnostics, polish, release
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P7-01 | P6-03 | Implement full read-only `doctor`, safe explicit repairs, actionable CLI/UI diagnostics | Read-only run leaves bytes unchanged; malformed/missing/duplicate IDs, access errors, schema corruption, stale/orphans found; ambiguous repairs refused (V14) |
+| [ ] | P7-01 | P6-03 | Implement full read-only `doctor`, safe explicit repairs, actionable CLI/UI diagnostics | Read-only run leaves bytes unchanged; malformed YAML, access errors, schema corruption, stale/orphans found; no source rewriting (V14) |
 | [ ] | P7-02 | P6-03 | Keyboard shortcuts, focus/accessibility, fast navigation/search, empty/error polish; command palette only if justified | Keyboard-only create/find/edit/move workflow; focus and screen-reader labels checked; no new product scope (V26) |
 | [ ] | P7-03 | P6-03 | Benchmark 1k/50k corpora, warm/cold behavior and watcher convergence; finish platform fault/security matrix | Reproducible distributions meet agreed budgets or limitations block target claim; no fabricated timing or untested OS promises (V07, V15, V19, V25) |
 | [ ] | P7-04 | P7-01, P7-02, P7-03 | Package chosen OS targets; install smoke, README/help, `docs/sync.md`, recovery/limitations docs; final v1 acceptance | Fresh install and complete release workflow pass, including actual external-tool transfer to another device and DB deletion/rebuild; all required evidence linked (V24, V26, V27) |
+
+## Deferred search UX
+
+- [ ] SEARCH-UX: evaluate interactive prefix matching, explicit phrase controls and separately scoped typo tolerance/ranking. Keep current literal behavior until explicitly authorized; add core/UI/native regression criteria before changing it.
 
 ## Backlog exclusions
 

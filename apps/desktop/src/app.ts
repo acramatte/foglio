@@ -51,7 +51,6 @@ export class App {
     header.append(
       element("strong", "foglio", "wordmark"),
       element("span", "A quiet place for your notes", "strapline"),
-      this.status,
     );
     const form = element("form", undefined, "library-form");
     const label = element("label", "Library folder");
@@ -107,16 +106,20 @@ export class App {
     reader.append(this.metadata, this.preview);
     workspace.append(sidebar, middle, reader);
     this.diagnostics.dataset.testid = "diagnostics";
+    const footer = element("footer");
+    this.status.title =
+      "Monitors changes made by external editors and sync tools. Foglio does not save or edit files.";
+    footer.append(
+      element("span", "READ ONLY · Edit in your favorite text editor."),
+      this.status,
+    );
     host.append(
       header,
       form,
       this.error,
       workspace,
       this.diagnostics,
-      element(
-        "footer",
-        "READ ONLY  ·  Edit in your favorite text editor. Changes appear here automatically.",
-      ),
+      footer,
     );
     this.empty(
       "Open your library",
@@ -202,10 +205,14 @@ export class App {
     this.state = state;
     this.status.textContent = state.root
       ? state.watcher_active
-        ? "● Watching for changes"
+        ? "Monitoring external changes"
         : "Watcher inactive"
       : "No library selected";
     if (state.error) this.report(state.error);
+    else if (state.root && !state.watcher_active)
+      this.report(
+        "External monitoring is inactive. Changes may not appear until the library is reopened.",
+      );
     else this.error.hidden = true;
     if (!changed) return;
     const epoch = ++this.epoch;
@@ -235,7 +242,7 @@ export class App {
     if (this.selected)
       this.empty(
         "Refreshing note…",
-        "Checking the current file by its stable identity.",
+        "Checking the current file at its selected path.",
       );
     else
       this.empty(
@@ -351,11 +358,9 @@ export class App {
     this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     try {
       let rows: {
-        id: string | null;
         path: string;
         title: string;
         snippet?: string;
-        ambiguous?: boolean;
       }[];
       let incomplete = browse.incomplete;
       if (query) {
@@ -383,28 +388,16 @@ export class App {
       for (const row of rows) {
         const b = element("button", undefined, "note-card");
         b.type = "button";
-        b.dataset.noteId = row.id ?? "";
-        b.setAttribute("aria-pressed", String(row.id === this.selected));
+        b.dataset.notePath = row.path;
+        b.setAttribute("aria-pressed", String(row.path === this.selected));
         b.append(
           element("strong", row.title || row.path),
           element("span", row.path, "note-path"),
         );
         if (row.snippet) b.append(element("span", row.snippet, "snippet"));
-        if (!row.id || row.ambiguous) {
-          b.disabled = true;
-          b.append(
-            element(
-              "span",
-              row.ambiguous
-                ? "Ambiguous identity · see diagnostics"
-                : "No valid identity · see diagnostics",
-              "warning",
-            ),
-          );
-        } else
-          b.addEventListener("click", () => {
-            void this.open(row.id!);
-          });
+        b.addEventListener("click", () => {
+          void this.open(row.path);
+        });
         this.list.append(b);
       }
       if (!rows.length)
@@ -413,7 +406,7 @@ export class App {
             "p",
             query || this.tag || this.folder
               ? "No matching notes. Try another search or clear your filters."
-              : "No notes yet. Add Markdown files with valid IDs using the CLI, or check diagnostics.",
+              : "No notes yet. Add Markdown files in your text editor, or check diagnostics.",
             "empty-list",
           ),
         );
@@ -431,31 +424,31 @@ export class App {
       }
     }
   }
-  async open(id: string): Promise<void> {
+  async open(path: string): Promise<void> {
     if (!this.state?.root) return;
     const request = ++this.noteRequest,
       epoch = this.epoch,
       session = this.state.session;
-    this.selected = id;
+    this.selected = path;
     this.note = null;
     this.empty("Loading note…", "Reading the current Markdown from disk.");
     for (const button of this.list.querySelectorAll<HTMLButtonElement>(
-      "[data-note-id]",
+      "[data-note-path]",
     ))
-      button.setAttribute("aria-pressed", String(button.dataset.noteId === id));
+      button.setAttribute("aria-pressed", String(button.dataset.notePath === path));
     try {
-      const note = await this.api.open(session, id);
+      const note = await this.api.open(session, path);
       if (
         !this.valid(epoch, note.session) ||
         request !== this.noteRequest ||
-        note.id !== this.selected
+        note.path !== this.selected
       )
         return;
       this.note = note;
       this.metadata.replaceChildren(
         element("span", note.path),
         element("span", note.tags.map((t) => "#" + t).join(" ")),
-        element("small", `ID ${note.id} · Read only`),
+        element("small", "Read only"),
       );
       this.preview.innerHTML = renderMarkdown(note.body);
       if (!note.body.trim())
@@ -485,7 +478,7 @@ export class App {
           link.target,
         );
         if (this.valid(epoch, resolved.session) && request === this.noteRequest)
-          await this.open(resolved.id);
+          await this.open(resolved.path);
       }
     } catch (error) {
       if (this.valid(epoch, note.session) && request === this.noteRequest)

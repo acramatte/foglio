@@ -151,7 +151,7 @@ fn pause_resume_manual_loss_periodic_and_restart() {
     w.shutdown().unwrap();
 }
 #[test]
-fn duplicate_conflict_copy_and_temporary_disappearance() {
+fn identical_content_copy_and_temporary_disappearance() {
     let (_t, lib) = fixture();
     let entry = lib.create("one.md", "# Original", &[]).unwrap();
     let bytes = fs::read(lib.root().join("one.md")).unwrap();
@@ -162,9 +162,7 @@ fn duplicate_conflict_copy_and_temporary_disappearance() {
         &lib,
         "import pathlib,sys,shutil\np=pathlib.Path(sys.argv[1]);shutil.copyfile(p/'one.md',p/'one.sync-conflict.md')",
     );
-    wait(&w, |s| {
-        s.status.ambiguous_notes == 2 && s.status.incomplete && s.notes.is_empty()
-    });
+    wait(&w, |s| s.notes.len() == 2 && !s.status.incomplete);
     assert_eq!(
         fs::read(lib.root().join("one.sync-conflict.md")).unwrap(),
         bytes
@@ -172,14 +170,14 @@ fn duplicate_conflict_copy_and_temporary_disappearance() {
     assert!(
         drain(&sub)
             .iter()
-            .any(|e| matches!(e.kind, EventKind::DiagnosticsChanged { .. }))
+            .any(|e| matches!(e.kind, EventKind::NoteCreated { .. }))
     );
     writer(
         &lib,
         "import pathlib,sys\n(pathlib.Path(sys.argv[1])/'one.sync-conflict.md').unlink()",
     );
     wait(&w, |s| s.notes.len() == 1 && !s.status.incomplete);
-    assert_eq!(w.snapshot().notes[0].id, entry.document.id.unwrap());
+    assert_eq!(w.snapshot().notes[0].path, entry.path);
     writer(
         &lib,
         "import pathlib,sys,time\np=pathlib.Path(sys.argv[1]);f=p/'one.md';data=f.read_bytes();f.unlink();time.sleep(.2);f.write_bytes(data)",

@@ -8,7 +8,6 @@ All note and configuration state lives in disposable temporary directories.
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import tempfile
@@ -16,7 +15,6 @@ import unittest
 
 
 BINARY = Path(__file__).resolve().parents[2] / "target/debug/notes"
-ID = re.compile(rb"(?m)^id: ['\"]?([0-7][0-9A-HJKMNP-TV-Z]{25})['\"]?\r?$")
 
 
 class Phase1(unittest.TestCase):
@@ -54,12 +52,6 @@ class Phase1(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0, (args, result.stdout, result.stderr))
         return result
 
-    def note_id(self, path):
-        match = ID.search(path.read_bytes().removeprefix(b"\xef\xbb\xbf"))
-        if match is None:
-            self.fail(f"No canonical ULID in {path.read_bytes()!r}")
-        return match.group(1).decode("ascii")
-
     def manifest(self):
         return {
             str(path.relative_to(self.library)): path.read_bytes()
@@ -73,35 +65,33 @@ class Phase1(unittest.TestCase):
         imported.write_bytes(original)
         self.run_notes("init", self.library)
         adopted = imported.read_bytes()
-        self.assertTrue(adopted.endswith(original))
-        imported_id = self.note_id(imported)
+        self.assertEqual(adopted, original)
         self.run_notes("init", self.library)
         self.assertEqual(imported.read_bytes(), adopted)
 
         self.run_notes("new", "Acceptance note", "--path", "fresh.md")
         fresh = self.library / "fresh.md"
-        fresh_id = self.note_id(fresh)
-        self.assertNotEqual(fresh_id, imported_id)
-        self.assertIn(b"# Acceptance note", fresh.read_bytes())
-        self.assertEqual(self.run_notes("show", fresh_id).stdout, fresh.read_bytes())
+        fresh_path = "fresh.md"
+        self.assertEqual(b"# Acceptance note\n", fresh.read_bytes())
+        self.assertEqual(self.run_notes("show", fresh_path).stdout, fresh.read_bytes())
         listing = self.run_notes("--json", "list")
         self.assertIsInstance(json.loads(listing.stdout), dict)
-        self.run_notes("tag", "add", fresh_id, "CaseSensitive")
+        self.run_notes("tag", "add", fresh_path, "CaseSensitive")
         once = fresh.read_bytes()
-        self.run_notes("tag", "add", fresh_id, "CaseSensitive")
+        self.run_notes("tag", "add", fresh_path, "CaseSensitive")
         self.assertEqual(fresh.read_bytes(), once)
         self.assertIn(b"CaseSensitive", self.run_notes("tags").stdout)
-        self.run_notes("tag", "remove", fresh_id, "missing")
+        self.run_notes("tag", "remove", fresh_path, "missing")
         self.assertEqual(fresh.read_bytes(), once)
-        self.run_notes("tag", "remove", fresh_id, "CaseSensitive")
+        self.run_notes("tag", "remove", fresh_path, "CaseSensitive")
 
         before_move = fresh.read_bytes()
-        self.run_notes("move", fresh_id, "nested/moved.md")
+        self.run_notes("move", fresh_path, "nested/moved.md")
         moved = self.library / "nested/moved.md"
         self.assertFalse(fresh.exists())
         self.assertEqual(moved.read_bytes(), before_move)
-        self.assertEqual(self.note_id(moved), fresh_id)
-        self.assertEqual(self.run_notes("show", "path:nested/moved.md").stdout, before_move)
+        fresh_path = "nested/moved.md"
+        self.assertEqual(self.run_notes("show", "nested/moved.md").stdout, before_move)
 
         before_reset = self.manifest()
         for name in ("config", "cache", "data"):
@@ -109,12 +99,12 @@ class Phase1(unittest.TestCase):
             (self.base / name).mkdir()
         self.run_notes("init", self.library)
         self.assertEqual(self.manifest(), before_reset)
-        self.run_notes("delete", fresh_id, success=False)
+        self.run_notes("delete", fresh_path, success=False)
         self.assertEqual(moved.read_bytes(), before_move)
-        self.run_notes("delete", fresh_id, "--yes")
+        self.run_notes("delete", fresh_path, "--yes")
         self.assertFalse(moved.exists())
         self.assertEqual(imported.read_bytes(), adopted)
-        print(f"\nVerified generated IDs: imported={imported_id}, created={fresh_id}")
+
 
     def test_preservation_of_nested_yaml_bom_crlf_and_tags(self):
         note = self.library / "preserved.md"
@@ -137,15 +127,16 @@ class Phase1(unittest.TestCase):
             b"description: |\r\n  tags: [not-app-tags]\r\n",
         ):
             self.assertIn(retained, adopted)
-        note_id = self.note_id(note)
-        self.run_notes("tag", "add", note_id, "new-tag")
+        self.assertEqual(adopted, prefix + b"---\r\n" + body)
+        note_path = "preserved.md"
+        self.run_notes("tag", "add", note_path, "new-tag")
         edited = note.read_bytes()
         self.assertTrue(edited.endswith(body))
         self.assertIn(b"description: |\r\n  tags: [not-app-tags]\r\n", edited)
         self.assertIn(b"extra:\r\n  id: untouched\r\n  nested: [one, two]\r\n", edited)
         self.assertIn(b"Actual title", self.run_notes("list").stdout)
 
-    def test_invalid_metadata_is_never_adopted(self):
+    def test_invalid_metadata_is_never_modified(self):
         fixtures = {
             "duplicate.md": b"---\nid: null\nid: null\n---\nbody\n",
             "nested-duplicate.md": b"---\ncustom:\n  key: a\n  'key': b\n---\nbody\n",
@@ -175,7 +166,7 @@ class Phase1(unittest.TestCase):
         readonly.write_bytes(original)
         readonly.chmod(0o444)
         self.run_notes("init", self.library, success=False)
-        self.note_id(note)
+        self.assertEqual(note.read_bytes(), b"# Hidden note\n")
         self.assertEqual(readonly.read_bytes(), original)
         self.assertEqual(non_note.read_bytes(), b"Not a Markdown note\n")
         non_note.unlink()
@@ -185,7 +176,7 @@ class Phase1(unittest.TestCase):
         note.chmod(0o444)
         self.run_notes("init", self.library)
         self.assertEqual(note.read_bytes(), adopted)
-        self.assertEqual(self.run_notes("show", "path:.hidden/note.md").stdout, adopted)
+        self.assertEqual(self.run_notes("show", ".hidden/note.md").stdout, adopted)
 
     def test_unsafe_alias_mutations_leave_all_bytes_unchanged(self):
         note = self.library / "alias.md"
@@ -194,7 +185,7 @@ class Phase1(unittest.TestCase):
             b"tags: &shared [one]\ncustom: *shared\n---\n# Alias\n"
         )
         note.write_bytes(content)
-        self.run_notes("--library", self.library, "tag", "add", "path:alias.md", "two", success=False)
+        self.run_notes("--library", self.library, "tag", "add", "alias.md", "two", success=False)
         self.assertEqual(note.read_bytes(), content)
 
     def test_literal_tag_punctuation_and_comment_preservation(self):
@@ -221,19 +212,23 @@ class Phase1(unittest.TestCase):
         else:
             self.assertEqual(note.read_bytes(), annotated)
 
-    def test_duplicates_have_no_scan_order_winner(self):
-        note_id = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
-        first = f"---\nid: {note_id}\n---\n# First\n".encode()
-        second = f"---\nid: {note_id}\n---\n# Second\n".encode()
-        (self.library / "a.md").write_bytes(first)
-        (self.library / "b.md").write_bytes(second)
+    def test_duplicate_metadata_and_identical_content_are_independent_paths(self):
+        first = b"---\nid: arbitrary # user-owned\n---\n# First\n"
+        for name in ("a.md", "b.md"):
+            (self.library / name).write_bytes(first)
         before = self.manifest()
-        self.run_notes("init", self.library, success=False)
-        self.assertEqual(self.run_notes("--library", self.library, "show", "path:a.md").stdout, first)
-        self.run_notes("--library", self.library, "show", f"id:{note_id}", success=False)
-        self.run_notes("--library", self.library, "tag", "add", "path:a.md", "no", success=False)
-        self.run_notes("--library", self.library, "delete", "path:b.md", "--yes", success=False)
+        self.run_notes("init", self.library)
         self.assertEqual(self.manifest(), before)
+        listing = json.loads(self.run_notes("--json", "list").stdout)["result"]
+        self.assertEqual([entry["path"] for entry in listing], ["a.md", "b.md"])
+        self.assertTrue(all("id" not in entry for entry in listing))
+        self.assertEqual(self.run_notes("show", "a.md").stdout, first)
+        self.run_notes("show", "id:arbitrary", success=False)
+        self.run_notes("tag", "add", "a.md", "work")
+        self.assertIn(b"id: arbitrary # user-owned", (self.library / "a.md").read_bytes())
+        self.assertEqual((self.library / "b.md").read_bytes(), first)
+        self.run_notes("delete", "b.md", "--yes")
+        self.assertTrue((self.library / "a.md").exists())
 
     def test_destinations_never_clobber_or_escape(self):
         self.run_notes("init", self.library)
@@ -339,7 +334,7 @@ class Phase1(unittest.TestCase):
         for child in children:
             child.communicate(timeout=15)
         self.assertEqual(sorted(child.returncode for child in children), [0, 4])
-        self.note_id(self.library / "race.md")
+        self.assertNotIn(b"id:", (self.library / "race.md").read_bytes())
         body = (self.library / "race.md").read_bytes()
         self.assertTrue(body.endswith(b"# First\n") or body.endswith(b"# Second\n"))
 
@@ -354,7 +349,7 @@ class Phase1(unittest.TestCase):
         (self.library / "linked-directory").symlink_to(outside, target_is_directory=True)
         self.run_notes("init", self.library, success=False)
         for selector in ("link.md", "linked-directory/secret.md", "../outside/secret.md"):
-            output = self.run_notes("--library", self.library, "show", f"path:{selector}", success=False)
+            output = self.run_notes("--library", self.library, "show", selector, success=False)
             self.assertNotIn(sentinel, output.stdout)
         self.run_notes("--library", self.library, "new", "Escape", "--path", "linked-directory/new.md", success=False)
         self.assertFalse((outside / "new.md").exists())

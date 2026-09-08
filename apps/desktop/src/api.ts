@@ -7,11 +7,9 @@ export interface DesktopState {
   error: string | null;
 }
 export interface Summary {
-  id: string | null;
   path: string;
   title: string;
   tags: string[];
-  ambiguous: boolean;
 }
 export interface Browse {
   session: number;
@@ -25,7 +23,6 @@ export interface Browse {
 export interface Search {
   session: number;
   hits: {
-    id: string;
     path: string;
     title: string;
     snippet: string;
@@ -35,7 +32,6 @@ export interface Search {
 }
 export interface Note {
   session: number;
-  id: string;
   path: string;
   title: string;
   tags: string[];
@@ -52,12 +48,12 @@ export interface Api {
     tag: string | null,
     folder: string | null,
   ): Promise<Search>;
-  open(session: number, id: string): Promise<Note>;
+  open(session: number, path: string): Promise<Note>;
   resolve(
     session: number,
     fromPath: string,
     target: string,
-  ): Promise<{ session: number; id: string }>;
+  ): Promise<{ session: number; path: string }>;
   external(url: string): Promise<void>;
 }
 export const api: Api = {
@@ -66,7 +62,7 @@ export const api: Api = {
   browse: (session) => invoke("browse_library", { session }),
   search: (session, query, tag, folder) =>
     invoke("search_notes", { session, query, tag, folder }),
-  open: (session, id) => invoke("open_note", { session, id }),
+  open: (session, path) => invoke("open_note", { session, path }),
   resolve: (session, fromPath, target) =>
     invoke("resolve_note_link", { session, fromPath, target }),
   external: (url) => invoke("open_external_link", { url }),

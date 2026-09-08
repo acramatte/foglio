@@ -1,6 +1,9 @@
+---
+id: 01M20M73Q6C0R4R3WGC69H8FDD
+---
 # Foglio
 
-A local-first Markdown notes application with a headless Rust core, filesystem CLI, and read-only Tauri desktop client. Desktop editing is not implemented.
+A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and read-only Tauri desktop client. Desktop editing is not implemented.
 
 **Status: Phases 1–4 implemented and verified locally on Linux x86_64.** [Desktop setup and native verification](docs/phase4.md). See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
@@ -22,7 +25,7 @@ python3 tests/acceptance/phase2.py
 
 The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`, `search`, `rescan`, `reindex`, `status`. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
 
-Tests use actual temporary files and the compiled executable with isolated HOME/XDG state. They cover adoption, body/metadata preservation, guarded lifecycle operations, stale writes, no-clobber collisions, permissions/ACLs, fault injection and a killed staged writer. The Python harness also exercises interactive deletion through a PTY and configuration deletion/reselection. It requires Python 3 on Linux; the platform test requires writable `/dev/shm` on a different filesystem from the temporary library.
+Tests use actual temporary files and the compiled executable with isolated HOME/XDG state. They cover non-mutating initialization and selection, body/metadata preservation, guarded lifecycle operations, stale writes, no-clobber collisions, permissions/ACLs, fault injection and a killed staged writer. The Python harness also exercises interactive deletion through a PTY and configuration deletion/reselection. It requires Python 3 on Linux; the platform test requires writable `/dev/shm` on a different filesystem from the temporary library.
 
 CI runs the locked build, Rust tests, Python acceptance harness, formatting, strict Clippy, and an isolated CLI help smoke on Ubuntu 24.04. Validate workflow syntax locally with `actionlint .github/workflows/ci.yml` (verified with actionlint 1.7.7). Core/CLI gates do not require Tauri or Node.
 
@@ -30,11 +33,13 @@ Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearin
 
 ## Desktop
 
-Install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`. The built binary is `target/debug/foglio-desktop`; production builds use `target/release/foglio-desktop`. Enter an existing library path to browse folders, tags and search results with safe Markdown preview. Selection never adopts or modifies notes.
+Install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`. The built binary is `target/debug/foglio-desktop`; production builds use `target/release/foglio-desktop`. Enter an existing library path to browse folders, tags and search results with safe Markdown preview. Selection and `init` never modify Markdown. Supported files need no frontmatter or IDs. Paths identify documents; hashes protect revisions. Existing `id` metadata is preserved without identity semantics. External moves leave the old selection unavailable rather than silently following matching content. See the [identity contract and verification](docs/path-identity.md).
 
 ```text
 Markdown → core index/watcher → Tauri commands → read-only navigation + sanitized preview
 ```
+
+Healthy monitoring status is a quiet footer indicator, separate from saving. Search behavior is unchanged; desktop creation/editing and autosave remain Phase 5.
 
 ## Scope and conventions
 

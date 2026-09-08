@@ -54,7 +54,7 @@ class Phase2(unittest.TestCase):
             self.assertEqual(db.execute("PRAGMA integrity_check").fetchall(), [("ok",)])
             self.assertEqual(db.execute("PRAGMA foreign_key_check").fetchall(), [])
             self.assertEqual(db.execute("SELECT count(*) FROM notes").fetchone(),db.execute("SELECT count(*) FROM notes_fts").fetchone())
-            self.assertEqual(db.execute("SELECT count(*) FROM tags WHERE note_id NOT IN (SELECT id FROM notes)").fetchone(), (0,))
+            self.assertEqual(db.execute("SELECT count(*) FROM tags WHERE note_path NOT IN (SELECT path FROM notes)").fetchone(), (0,))
 
     def test_cli_search_recovery_and_external_lifecycle(self):
         self.run_cli("new", "Alpha", "--path", "foo/a.md", "--body", "# Alpha\nquick brown café", "--tag", "Case")
@@ -148,8 +148,10 @@ class Phase2(unittest.TestCase):
             else:
                 self.assertFalse(out['incomplete'])
         self.run_cli('reindex')
-        ids = [p.read_text().split('id: ')[1].splitlines()[0] for p in self.root.glob('*.md')]
-        self.assertEqual(len(ids),len(set(ids)))
+        paths = sorted(p.name for p in self.root.glob('*.md'))
+        expected = ['Base.md'] + [f'{args[1]}.md' for args, code, _ in results if args[0] == 'new' and code == 0]
+        self.assertEqual(paths, sorted(expected))
+        self.assertTrue(all(not p.read_text().startswith('---') for p in self.root.glob('*.md')))
         self.integrity()
 
 if __name__ == '__main__':

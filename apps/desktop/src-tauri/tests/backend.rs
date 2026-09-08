@@ -6,7 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tempfile::TempDir;
-const ID: &str = "01ARZ3NDEKTSV4RRFFQ69G5FAV";
 fn fixture() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("notes");
@@ -14,7 +13,7 @@ fn fixture() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
     fs::create_dir_all(root.join("folder/empty")).unwrap();
     fs::write(
         root.join("folder/a.md"),
-        format!("---\nid: {ID}\ntags: [rust]\ncustom: preserved\n---\n# Alpha\nneedle\n"),
+        "---\ntags: [rust]\ncustom: preserved\n---\n# Alpha\nneedle\n",
     )
     .unwrap();
     (temp, root, state)
@@ -22,9 +21,9 @@ fn fixture() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
 #[test]
 fn readonly_browse_search_open_and_selection_preserve_bytes() {
     let (_temp, root, state) = fixture();
-    fs::write(root.join("unadopted.md"), "# Import\nuntouched\n").unwrap();
-    fs::write(root.join("bad.md"), "---\nid: invalid\n---\nbad").unwrap();
-    let before: Vec<_> = ["folder/a.md", "unadopted.md", "bad.md"]
+    fs::write(root.join("plain.md"), "# Import\nuntouched\n").unwrap();
+    fs::write(root.join("metadata.md"), "---\nid: invalid\n---\nbad").unwrap();
+    let before: Vec<_> = ["folder/a.md", "plain.md", "metadata.md"]
         .into_iter()
         .map(|p| (p, fs::read(root.join(p)).unwrap()))
         .collect();
@@ -32,20 +31,38 @@ fn readonly_browse_search_open_and_selection_preserve_bytes() {
     let selected = backend.select_with_state(&root, &state).unwrap();
     assert!(selected.watcher_active);
     let browse = backend.browse(selected.session).unwrap();
-    assert_eq!(browse.notes.len(), 1);
-    assert!(browse.incomplete);
+    assert_eq!(browse.notes.len(), 3);
+    assert!(!browse.incomplete);
     assert!(browse.folders.contains(&"folder/empty".into()));
     let json = serde_json::to_value(&browse).unwrap();
     assert!(json["notes"][0].get("body").is_none());
-    assert!(browse.diagnostics.iter().any(|d| d.path == "unadopted.md"));
+    assert!(browse.diagnostics.is_empty());
+    assert!(
+        json["notes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|n| n.get("id").is_none() && n.get("ambiguous").is_none())
+    );
     assert!(
         backend
-            .open(selected.session, ID)
+            .open(selected.session, "plain.md")
+            .unwrap()
+            .body
+            .contains("untouched")
+    );
+    assert_eq!(
+        backend.open(selected.session, "metadata.md").unwrap().body,
+        "bad"
+    );
+    assert!(
+        backend
+            .open(selected.session, "folder/a.md")
             .unwrap()
             .body
             .contains("needle")
     );
-    let _ = backend
+    let search = backend
         .search(
             selected.session,
             "needle".into(),
@@ -53,6 +70,19 @@ fn readonly_browse_search_open_and_selection_preserve_bytes() {
             Some("folder".into()),
         )
         .unwrap();
+    assert_eq!(search.hits.len(), 1);
+    assert_eq!(search.hits[0].path, "folder/a.md");
+    assert!(
+        serde_json::to_value(&search).unwrap()["hits"][0]
+            .get("id")
+            .is_none()
+    );
+    assert!(
+        serde_json::to_value(backend.open(selected.session, "folder/a.md").unwrap())
+            .unwrap()
+            .get("id")
+            .is_none()
+    );
     let persisted: std::path::PathBuf =
         serde_json::from_slice(&fs::read(state.join("config.json")).unwrap()).unwrap();
     assert_eq!(persisted, root);
@@ -63,7 +93,7 @@ fn readonly_browse_search_open_and_selection_preserve_bytes() {
     }
 }
 #[test]
-fn links_are_contained_and_identity_checked() {
+fn links_are_contained_and_resolved_by_path() {
     let (_temp, root, state) = fixture();
     let backend = Backend::new().unwrap();
     let s = backend.select_with_state(&root, &state).unwrap().session;
@@ -71,8 +101,8 @@ fn links_are_contained_and_identity_checked() {
         backend
             .resolve_link(s, "folder/a.md", "a.md#heading")
             .unwrap()
-            .id,
-        ID
+            .path,
+        "folder/a.md"
     );
     assert_eq!(
         relative_link("folder/a.md", "../folder/a.md").unwrap(),
@@ -99,15 +129,62 @@ fn links_are_contained_and_identity_checked() {
     #[cfg(unix)]
     {
         std::os::unix::fs::symlink(root.join("folder"), root.join("alias")).unwrap();
+        assert!(backend.open(s, "alias/a.md").is_err());
         assert!(
             backend
                 .resolve_link(s, "folder/a.md", "../alias/a.md")
                 .is_err()
         );
+        fs::remove_file(root.join("alias")).unwrap();
     }
-    fs::copy(root.join("folder/a.md"), root.join("duplicate.md")).unwrap();
-    assert!(backend.resolve_link(s, "folder/a.md", "a.md").is_err());
-    assert!(backend.open(s, ID).is_err());
+    fs::write(
+        root.join("folder/a.md"),
+        "---\nid: arbitrary-id\n---\n# First",
+    )
+    .unwrap();
+    fs::write(
+        root.join("duplicate.md"),
+        "---\nid: arbitrary-id\n---\n# Second",
+    )
+    .unwrap();
+    assert_eq!(
+        backend.resolve_link(s, "folder/a.md", "a.md").unwrap().path,
+        "folder/a.md"
+    );
+    assert_eq!(
+        backend
+            .resolve_link(s, "folder/a.md", "../duplicate.md")
+            .unwrap()
+            .path,
+        "duplicate.md"
+    );
+    assert_eq!(backend.open(s, "folder/a.md").unwrap().body, "# First");
+    assert_eq!(backend.open(s, "duplicate.md").unwrap().body, "# Second");
+    let browse = backend.browse(s).unwrap();
+    assert!(!browse.incomplete);
+    assert!(browse.diagnostics.is_empty());
+    assert_eq!(browse.notes.len(), 2);
+    for (query, path) in [("First", "folder/a.md"), ("Second", "duplicate.md")] {
+        let result = backend.search(s, query.into(), None, None).unwrap();
+        assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.hits[0].path, path);
+    }
+    let resolved = serde_json::to_value(
+        backend
+            .resolve_link(s, "folder/a.md", "../duplicate.md")
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        resolved,
+        serde_json::json!({"session": s, "path": "duplicate.md"})
+    );
+    assert_eq!(
+        fs::read_to_string(root.join("duplicate.md")).unwrap(),
+        "---\nid: arbitrary-id\n---\n# Second"
+    );
+    assert!(backend.open(s, "../outside.md").is_err());
+    assert!(backend.open(s, "/etc/passwd.md").is_err());
     assert!(backend.open(s, "path:folder/a.md").is_err());
 }
 #[test]
@@ -138,16 +215,12 @@ fn native_watcher_refreshes_current_disk_and_switch_releases_backend() {
     let (_temp, root, state) = fixture();
     let backend = Backend::new().unwrap();
     let selected = backend.select_with_state(&root, &state).unwrap();
-    fs::write(
-        root.join("folder/a.md"),
-        format!("---\nid: {ID}\n---\n# Changed\nfresh disk\n"),
-    )
-    .unwrap();
+    fs::write(root.join("folder/a.md"), "# Changed\nfresh disk\n").unwrap();
     let deadline = Instant::now() + Duration::from_secs(8);
     loop {
         if backend.state().generation > selected.generation
             && backend
-                .open(selected.session, ID)
+                .open(selected.session, "folder/a.md")
                 .unwrap()
                 .body
                 .contains("fresh disk")
@@ -157,6 +230,24 @@ fn native_watcher_refreshes_current_disk_and_switch_releases_backend() {
         assert!(Instant::now() < deadline, "watcher did not converge");
         thread::sleep(Duration::from_millis(20));
     }
+    fs::rename(root.join("folder/a.md"), root.join("renamed.md")).unwrap();
+    assert!(backend.open(selected.session, "folder/a.md").is_err());
+    assert!(
+        backend
+            .open(selected.session, "renamed.md")
+            .unwrap()
+            .body
+            .contains("fresh disk")
+    );
+    let paths: Vec<_> = backend
+        .browse(selected.session)
+        .unwrap()
+        .notes
+        .into_iter()
+        .map(|n| n.path)
+        .collect();
+    assert!(paths.contains(&"renamed.md".into()));
+    assert!(!paths.contains(&"folder/a.md".into()));
     let other = root.parent().unwrap().join("other");
     fs::create_dir(&other).unwrap();
     let switched = backend.select_with_state(&other, &state).unwrap();
@@ -205,7 +296,7 @@ fn concurrent_selections_are_serial_and_state_does_not_wait_for_core_lock() {
     sessions.sort();
     assert_eq!(sessions, vec![1, 2]);
     assert_eq!(backend.state().session, 2);
-    assert!(backend.open(1, ID).is_err());
+    assert!(backend.open(1, "folder/a.md").is_err());
 }
 #[test]
 fn failed_selection_keeps_previous_session_and_configuration() {

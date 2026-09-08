@@ -1,6 +1,6 @@
 //! Read-only desktop boundary. Slow core work and watcher joins run on blocking workers.
 use notes_core::{
-    Library, NoteId,
+    Library,
     library::{Diagnostic, NoteSummary},
     search::{SearchHit, SearchQuery},
     watcher::{Subscription, WatchOptions, Watcher},
@@ -48,7 +48,6 @@ pub struct Search {
 #[derive(Serialize)]
 pub struct Note {
     pub session: u64,
-    pub id: String,
     pub path: String,
     pub title: String,
     pub tags: Vec<String>,
@@ -58,7 +57,7 @@ pub struct Note {
 #[derive(Serialize)]
 pub struct Resolved {
     pub session: u64,
-    pub id: String,
+    pub path: String,
 }
 struct Selection {
     library: Arc<Library>,
@@ -204,7 +203,7 @@ impl Backend {
     pub fn browse(&self, session: u64) -> Result<Browse> {
         self.with_selection(session, |s| {
             let generation = self.state().generation;
-            let report = s.library.scan(false).map_err(err)?;
+            let report = s.library.scan().map_err(err)?;
             let mut folders = Vec::new();
             let mut diagnostics = report.diagnostics.clone();
             collect_folders(
@@ -247,14 +246,12 @@ impl Backend {
             })
         })
     }
-    pub fn open(&self, session: u64, id: &str) -> Result<Note> {
-        NoteId::parse(id).map_err(err)?;
+    pub fn open(&self, session: u64, path: &str) -> Result<Note> {
         self.with_selection(session, |s| {
-            let entry = s.library.get(&format!("id:{id}")).map_err(err)?;
+            let entry = s.library.get(path).map_err(err)?;
             let d = entry.document;
             Ok(Note {
                 session,
-                id: id.into(),
                 path: entry.path,
                 title: d.title.clone(),
                 tags: d.tags.clone(),
@@ -266,20 +263,12 @@ impl Backend {
     pub fn resolve_link(&self, session: u64, from: &str, target: &str) -> Result<Resolved> {
         let path = relative_link(from, target)?;
         self.with_selection(session, |s| {
-            // Validate ancestors against symlinks, then use core's duplicate policy.
+            // Resolve only the contained path; frontmatter and revisions are not identity.
             notes_core::filesystem::safe_path(s.library.root(), &path).map_err(err)?;
-            let entry = s.library.get(&format!("path:{path}")).map_err(err)?;
-            if entry.ambiguous {
-                return Err("ambiguous note link".into());
-            }
-            let id = entry.document.id.ok_or("linked note has no ID")?;
-            let unique = s.library.get(&format!("id:{}", id.as_str())).map_err(err)?;
-            if unique.path != path {
-                return Err("note link changed during resolution".into());
-            }
+            let entry = s.library.get(&path).map_err(err)?;
             Ok(Resolved {
                 session,
-                id: id.as_str().into(),
+                path: entry.path,
             })
         })
     }

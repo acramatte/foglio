@@ -52,7 +52,6 @@ impl SearchQuery {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchHit {
-    pub id: String,
     pub path: String,
     pub title: String,
     pub snippet: String,
@@ -117,10 +116,10 @@ impl SearchSession {
                 .join(" AND "),
         };
         let mut stmt = self.connection.prepare(
-            "SELECT n.id,n.path,n.title,snippet(notes_fts,-1,'','','…',24),bm25(notes_fts,0,10,1,2,2)
-             FROM notes_fts JOIN notes n ON n.id=notes_fts.note_id
+            "SELECT n.path,n.title,snippet(notes_fts,-1,'','','…',24),bm25(notes_fts,0,10,1,2,2)
+             FROM notes_fts JOIN notes n ON n.path=notes_fts.note_path
              WHERE notes_fts MATCH ?1
-             AND (?2 IS NULL OR EXISTS(SELECT 1 FROM tags t WHERE t.note_id=n.id AND t.tag=?2 COLLATE BINARY))
+             AND (?2 IS NULL OR EXISTS(SELECT 1 FROM tags t WHERE t.note_path=n.path AND t.tag=?2 COLLATE BINARY))
              AND (?3 IS NULL OR substr(n.path,1,length(?3)+1)=?3||'/')
              ORDER BY bm25(notes_fts,0,10,1,2,2),n.path COLLATE BINARY LIMIT ?4"
         ).map_err(db_error)?;
@@ -128,11 +127,10 @@ impl SearchSession {
             params![expression, query.tag, query.folder, query.limit as i64],
             |r| {
                 Ok(SearchHit {
-                    id: r.get(0)?,
-                    path: r.get(1)?,
-                    title: r.get(2)?,
-                    snippet: r.get(3)?,
-                    rank: r.get(4)?,
+                    path: r.get(0)?,
+                    title: r.get(1)?,
+                    snippet: r.get(2)?,
+                    rank: r.get(3)?,
                 })
             },
         )

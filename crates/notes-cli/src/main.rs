@@ -12,7 +12,7 @@ use std::{
     name = "notes",
     version,
     about = "Foglio: local-first Markdown notes",
-    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Selectors: full ULID, relative .md path, id:ULID or path:relative.md. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/ambiguous/busy. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
+    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Paths are library-relative .md paths; no IDs or adoption required. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/busy. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
 )]
 struct Cli {
     #[arg(long, global = true)]
@@ -24,7 +24,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Command {
-    /// Create/select a library and safely adopt missing IDs (never clears files).
+    /// Create/select a library without modifying existing Markdown files.
     Init {
         directory: PathBuf,
     },
@@ -61,16 +61,16 @@ enum Command {
     Status,
     /// Print the complete Markdown document.
     Show {
-        selector: String,
+        path: String,
     },
     /// Move to a complete relative .md destination without overwriting.
     Move {
-        selector: String,
+        path: String,
         destination: String,
     },
     /// Permanently delete one note.
     Delete {
-        selector: String,
+        path: String,
         #[arg(long)]
         yes: bool,
     },
@@ -82,8 +82,8 @@ enum Command {
 }
 #[derive(Subcommand)]
 enum TagCommand {
-    Add { selector: String, tag: String },
-    Remove { selector: String, tag: String },
+    Add { path: String, tag: String },
+    Remove { path: String, tag: String },
 }
 struct Output {
     result: Value,
@@ -145,7 +145,7 @@ fn execute(cli: &Cli) -> Result<Output> {
             let human = report
                 .hits
                 .iter()
-                .map(|h| format!("{}\t{}\t{}\n{}\n", h.id, h.path, h.title, h.snippet))
+                .map(|h| format!("{}\t{}\n{}\n", h.path, h.title, h.snippet))
                 .collect();
             (json!(report), human)
         }
@@ -158,11 +158,10 @@ fn execute(cli: &Cli) -> Result<Output> {
             diagnostics = json!(status.diagnostics);
             incomplete = status.incomplete;
             let human = format!(
-                "{} discovered; {} indexed; {} stale; {} ambiguous\n{} parsed; {} reused\nWatcher: inactive (this process)\n",
+                "{} discovered; {} indexed; {} stale\n{} parsed; {} reused\nWatcher: inactive (this process)\n",
                 status.discovered_notes,
                 status.indexed_notes,
                 status.stale_notes,
-                status.ambiguous_notes,
                 status.parsed_notes,
                 status.reused_notes
             );
@@ -194,20 +193,16 @@ fn execute(cli: &Cli) -> Result<Output> {
                 &body.clone().unwrap_or_else(|| format!("# {title}\n")),
                 tags,
             )?;
-            (
-                json!(e),
-                format!("{}\t{}\n", e.document.id.as_ref().unwrap().as_str(), e.path),
-            )
+            (json!(e), format!("{}\n", e.path))
         }
         Command::List | Command::Tags => {
-            let r = lib.scan(false)?;
+            let r = lib.scan()?;
             diagnostics = json!(r.diagnostics);
             incomplete = r.incomplete;
             if matches!(command, Command::Tags) {
                 let mut tags: Vec<_> = r
                     .notes
                     .iter()
-                    .filter(|e| !e.ambiguous)
                     .flat_map(|e| e.document.tags.clone())
                     .collect();
                 tags.sort();
@@ -217,34 +212,23 @@ fn execute(cli: &Cli) -> Result<Output> {
                 let human = r
                     .notes
                     .iter()
-                    .map(|e| {
-                        format!(
-                            "{}\t{}\t{}{}\n",
-                            e.document.id.as_ref().unwrap().as_str(),
-                            e.path,
-                            e.document.title,
-                            if e.ambiguous { " [ambiguous]" } else { "" }
-                        )
-                    })
+                    .map(|e| format!("{}\t{}\n", e.path, e.document.title))
                     .collect();
                 (json!(r.summaries()), human)
             }
         }
-        Command::Show { selector } => {
-            let e = lib.get(selector)?;
+        Command::Show { path } => {
+            let e = lib.get(path)?;
             (json!(e), e.document.source)
         }
-        Command::Move {
-            selector,
-            destination,
-        } => {
-            let e = lib.get(selector)?;
-            let c = lib.move_note(selector, &e.document.revision, destination)?;
+        Command::Move { path, destination } => {
+            let e = lib.get(path)?;
+            let c = lib.move_note(path, &e.document.revision, destination)?;
             incomplete = !c.durability_confirmed;
             (json!(c), format!("Moved to {destination}\n"))
         }
-        Command::Delete { selector, yes } => {
-            let e = lib.get(selector)?;
+        Command::Delete { path, yes } => {
+            let e = lib.get(path)?;
             if !yes {
                 if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
                     return Err(Error::new(
@@ -260,17 +244,17 @@ fn execute(cli: &Cli) -> Result<Output> {
                     return Err(Error::new(ErrorCode::Cancelled, "deletion cancelled"));
                 }
             }
-            let c = lib.delete(selector, &e.document.revision)?;
+            let c = lib.delete(path, &e.document.revision)?;
             incomplete = !c.durability_confirmed;
             (json!(c), format!("Deleted {}\n", e.path))
         }
         Command::Tag { command } => {
-            let (selector, tag, add) = match command {
-                TagCommand::Add { selector, tag } => (selector, tag, true),
-                TagCommand::Remove { selector, tag } => (selector, tag, false),
+            let (path, tag, add) = match command {
+                TagCommand::Add { path, tag } => (path, tag, true),
+                TagCommand::Remove { path, tag } => (path, tag, false),
             };
-            let e = lib.get(selector)?;
-            let c = lib.tag(selector, &e.document.revision, tag, add)?;
+            let e = lib.get(path)?;
+            let c = lib.tag(path, &e.document.revision, tag, add)?;
             incomplete = !c.durability_confirmed;
             (json!(c), format!("Updated tags for {}\n", e.path))
         }

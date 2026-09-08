@@ -1,8 +1,7 @@
 use crate::ErrorCode;
-use crate::{Document, Error, NoteId, Result, filesystem as fs, revision};
+use crate::{Document, Error, Result, filesystem as fs, revision};
 use serde::Serialize;
 use std::{
-    collections::HashMap,
     fs as disk,
     path::{Path, PathBuf},
 };
@@ -11,7 +10,6 @@ pub struct Entry {
     pub path: String,
     #[serde(flatten)]
     pub document: Document,
-    pub ambiguous: bool,
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct Diagnostic {
@@ -27,22 +25,18 @@ pub struct Report {
 }
 #[derive(Debug, Clone, Serialize)]
 pub struct NoteSummary {
-    pub id: Option<NoteId>,
     pub path: String,
     pub title: String,
     pub tags: Vec<String>,
-    pub ambiguous: bool,
 }
 impl Report {
     pub fn summaries(&self) -> Vec<NoteSummary> {
         self.notes
             .iter()
             .map(|entry| NoteSummary {
-                id: entry.document.id.clone(),
                 path: entry.path.clone(),
                 title: entry.document.title.clone(),
                 tags: entry.document.tags.clone(),
-                ambiguous: entry.ambiguous,
             })
             .collect()
     }
@@ -152,7 +146,7 @@ impl Library {
         lib.cache_path()?;
         Ok(lib)
     }
-    /// Persist this validated existing root without adopting or changing notes.
+    /// Persist this validated existing root without changing notes.
     /// Uses the same locked, revision-checked durable config format as CLI init.
     pub fn select_existing(&self) -> Result<()> {
         fs::check_chain(&self.root)?;
@@ -196,7 +190,7 @@ impl Library {
                 outcome,
             ));
         }
-        let report = lib.scan(true)?;
+        let report = lib.scan()?;
         Ok((lib, report))
     }
     pub fn lock(&self) -> Result<fs::LibraryLock> {
@@ -206,49 +200,14 @@ impl Library {
             revision(self.root.as_os_str().as_encoded_bytes())
         )))
     }
-    pub fn scan(&self, adopt: bool) -> Result<Report> {
-        let _lock = if adopt { Some(self.lock()?) } else { None };
+    pub fn scan(&self) -> Result<Report> {
         let mut report = Report::default();
-        self.walk(&self.root, &mut report, adopt)?;
+        self.walk(&self.root, &mut report)?;
         report.notes.sort_by(|a, b| a.path.cmp(&b.path));
-        let mut ids = HashMap::<String, usize>::new();
-        for e in &report.notes {
-            if let Some(id) = &e.document.id {
-                *ids.entry(id.as_str().into()).or_default() += 1;
-            }
-        }
-        for e in &mut report.notes {
-            if e.document
-                .id
-                .as_ref()
-                .is_some_and(|id| ids[id.as_str()] > 1)
-            {
-                e.ambiguous = true;
-                report.diagnostics.push(Diagnostic {
-                    path: e.path.clone(),
-                    code: ErrorCode::Ambiguous,
-                    message: "duplicate id: every member is ambiguous".into(),
-                });
-            }
-        }
-        if adopt {
-            match self.reconcile_locked(false, false) {
-                Ok((_, status)) => {
-                    if status.incomplete && report.diagnostics.is_empty() {
-                        report.diagnostics.extend(status.diagnostics);
-                    }
-                }
-                Err(e) => report.diagnostics.push(Diagnostic {
-                    path: String::new(),
-                    code: ErrorCode::Index,
-                    message: e.to_string(),
-                }),
-            }
-        }
         report.incomplete = !report.diagnostics.is_empty();
         Ok(report)
     }
-    fn walk(&self, dir: &Path, r: &mut Report, adopt: bool) -> Result<()> {
+    fn walk(&self, dir: &Path, r: &mut Report) -> Result<()> {
         fs::check_chain(dir)?;
         for ent in disk::read_dir(dir)? {
             let ent = match ent {
@@ -277,7 +236,7 @@ impl Library {
                     return Err(Error::new(ErrorCode::Path, "non-UTF-8 path"));
                 }
                 if meta.is_dir() {
-                    return self.walk(&p, r, adopt);
+                    return self.walk(&p, r);
                 }
                 if ent
                     .file_name()
@@ -294,29 +253,11 @@ impl Library {
                     ));
                 }
                 fs::relative(&relative)?;
-                let mut doc =
+                let doc =
                     Document::parse(&fs::read(&p)?, p.file_stem().unwrap().to_str().unwrap())?;
-                if doc.id.is_none() {
-                    if adopt {
-                        let source = doc.with_id(&NoteId::generate());
-                        let candidate = Document::parse(source.as_bytes(), &doc.title)?;
-                        let outcome = fs::save(&p, source.as_bytes(), Some(&doc.revision))?;
-                        doc = candidate;
-                        if !outcome.durability_confirmed {
-                            r.diagnostics.push(Diagnostic {
-                                path: relative.clone(),
-                                code: ErrorCode::Committed,
-                                message: "adopted; durability uncertain".into(),
-                            });
-                        }
-                    } else {
-                        return Err(Error::new(ErrorCode::MissingId, "run init to adopt"));
-                    }
-                }
                 r.notes.push(Entry {
                     path: relative.clone(),
                     document: doc,
-                    ambiguous: false,
                 });
                 Ok(())
             })();
@@ -330,49 +271,9 @@ impl Library {
         }
         Ok(())
     }
-    pub fn get(&self, selector: &str) -> Result<Entry> {
-        let r = self.scan(false)?;
-        if let Some(p) = selector.strip_prefix("path:") {
-            return r
-                .notes
-                .iter()
-                .find(|e| e.path == p)
-                .cloned()
-                .map(Ok)
-                .unwrap_or_else(|| self.read_entry(p));
-        }
-        let explicit = selector.strip_prefix("id:");
-        let id = if let Some(s) = explicit {
-            Some(NoteId::parse(s)?)
-        } else {
-            NoteId::parse(selector).ok()
-        };
-        let by_id: Vec<_> = r
-            .notes
-            .iter()
-            .filter(|e| {
-                id.as_ref()
-                    .is_some_and(|id| e.document.id.as_ref() == Some(id))
-            })
-            .collect();
-        let by_path = if explicit.is_none() {
-            r.notes.iter().find(|e| e.path == selector)
-        } else {
-            None
-        };
-        if by_id.len() > 1 || (!by_id.is_empty() && by_path.is_some()) {
-            return Err(Error::new(
-                ErrorCode::Ambiguous,
-                "use an explicit path for inspection",
-            ));
-        }
-        if let Some(e) = by_id.first().copied().or(by_path) {
-            return Ok(e.clone());
-        }
-        if explicit.is_none() && selector.ends_with(".md") {
-            return self.read_entry(selector);
-        }
-        Err(Error::new(ErrorCode::NotFound, "note not found"))
+    /// Read a literal safe library-relative Markdown path.
+    pub fn get(&self, path: &str) -> Result<Entry> {
+        self.read_entry(path)
     }
     fn read_entry(&self, p: &str) -> Result<Entry> {
         let path = fs::safe_path(&self.root, p)?;
@@ -386,33 +287,12 @@ impl Library {
         Ok(Entry {
             path: p.into(),
             document,
-            ambiguous: false,
         })
     }
-    fn mutation_target(&self, selector: &str, expected: &crate::Revision) -> Result<Entry> {
-        let e = self.get(selector)?;
-        let id = e
-            .document
-            .id
-            .as_ref()
-            .ok_or_else(|| Error::new(ErrorCode::MissingId, "run init first"))?;
-        let r = self.scan(false)?;
-        if r.notes
-            .iter()
-            .filter(|n| n.document.id.as_ref() == Some(id))
-            .count()
-            != 1
-        {
-            return Err(Error::new(ErrorCode::Ambiguous, "duplicate identity"));
-        }
-        if r.diagnostics
-            .iter()
-            .any(|d| !matches!(d.code.as_str(), "skipped" | "missing_id" | "ambiguous"))
-        {
-            return Err(Error::new(
-                ErrorCode::Incomplete,
-                "cannot establish complete identity map",
-            ));
+    fn mutation_target(&self, path: &str, expected: &crate::Revision) -> Result<Entry> {
+        let e = self.get(path)?;
+        if &e.document.revision != expected {
+            return Err(Error::new(ErrorCode::Conflict, "note revision changed"));
         }
         fs::precondition(&fs::safe_path(&self.root, &e.path)?, expected)?;
         Ok(e)
@@ -420,14 +300,19 @@ impl Library {
     pub fn create(&self, path: &str, body: &str, tags: &[String]) -> Result<Entry> {
         let _lock = self.lock()?;
         let path_abs = fs::safe_path(&self.root, path)?;
-        let id = NoteId::generate();
-        let source = format!(
-            "---\nid: {}\ntags: {}\n---\n{}",
-            id.as_str(),
-            serde_json::to_string(tags).unwrap(),
-            body
-        );
-        let document = Document::parse(source.as_bytes(), path)?;
+        let source = if tags.is_empty() {
+            body.to_string()
+        } else {
+            format!(
+                "---\ntags: {}\n---\n{}",
+                serde_json::to_string(tags).unwrap(),
+                body
+            )
+        };
+        let document = Document::parse(
+            source.as_bytes(),
+            path_abs.file_stem().unwrap().to_str().unwrap(),
+        )?;
         let commit = fs::save(&path_abs, source.as_bytes(), None)?;
         let commit = self.index_after_commit(commit)?;
         if !commit.durability_confirmed {
@@ -436,17 +321,11 @@ impl Library {
         Ok(Entry {
             path: path.into(),
             document,
-            ambiguous: false,
         })
     }
-    pub fn update(
-        &self,
-        selector: &str,
-        expected: &crate::Revision,
-        body: &str,
-    ) -> Result<fs::Commit> {
+    pub fn update(&self, path: &str, expected: &crate::Revision, body: &str) -> Result<fs::Commit> {
         let _lock = self.lock()?;
-        let e = self.mutation_target(selector, expected)?;
+        let e = self.mutation_target(path, expected)?;
         let source = e.document.with_body(body);
         Document::parse(source.as_bytes(), &e.document.title)?;
         let commit = fs::save(
@@ -458,13 +337,13 @@ impl Library {
     }
     pub fn tag(
         &self,
-        selector: &str,
+        path: &str,
         expected: &crate::Revision,
         tag: &str,
         add: bool,
     ) -> Result<fs::Commit> {
         let _lock = self.lock()?;
-        let e = self.mutation_target(selector, expected)?;
+        let e = self.mutation_target(path, expected)?;
         let mut tags = e.document.tags.clone();
         if add && !tags.iter().any(|t| t == tag) {
             tags.push(tag.into());
@@ -487,12 +366,12 @@ impl Library {
     }
     pub fn move_note(
         &self,
-        selector: &str,
+        path: &str,
         expected: &crate::Revision,
         to: &str,
     ) -> Result<fs::Commit> {
         let _lock = self.lock()?;
-        let e = self.mutation_target(selector, expected)?;
+        let e = self.mutation_target(path, expected)?;
         let commit = fs::move_file(
             &fs::safe_path(&self.root, &e.path)?,
             &fs::safe_path(&self.root, to)?,
@@ -500,9 +379,9 @@ impl Library {
         )?;
         self.index_after_commit(commit)
     }
-    pub fn delete(&self, selector: &str, expected: &crate::Revision) -> Result<fs::Commit> {
+    pub fn delete(&self, path: &str, expected: &crate::Revision) -> Result<fs::Commit> {
         let _lock = self.lock()?;
-        let e = self.mutation_target(selector, expected)?;
+        let e = self.mutation_target(path, expected)?;
         let commit = fs::delete_file(&fs::safe_path(&self.root, &e.path)?, expected)?;
         self.index_after_commit(commit)
     }

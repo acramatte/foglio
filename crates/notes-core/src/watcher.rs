@@ -223,7 +223,7 @@ impl Watcher {
         subscribers.push(Arc::downgrade(&queue));
         Ok(Subscription { queue })
     }
-    /// Request asynchronous full content reconciliation (no adoption).
+    /// Request asynchronous full content reconciliation (no source writes).
     pub fn rescan(&self) {
         self.shared.recovery.fetch_or(MANUAL, Ordering::Release);
     }
@@ -460,18 +460,22 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
             shared.publish(
                 generation,
                 EventKind::RescanRequired {
-                    reason: "incomplete_or_recovered_identity_map".into(),
+                    reason: "incomplete_or_recovered_scan".into(),
                 },
             );
         }
         // Eligibility loss is not proof of file deletion. Never invent deletes
-        // for unknown coverage, malformed metadata or duplicate conflict copies.
+        // for unknown coverage, malformed metadata.
         return;
     }
-    let old: BTreeMap<_, _> = previous.notes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let new: BTreeMap<_, _> = next.notes.iter().map(|n| (n.id.as_str(), n)).collect();
-    for (id, note) in &old {
-        if !new.contains_key(id) {
+    let old: BTreeMap<_, _> = previous
+        .notes
+        .iter()
+        .map(|n| (n.path.as_str(), n))
+        .collect();
+    let new: BTreeMap<_, _> = next.notes.iter().map(|n| (n.path.as_str(), n)).collect();
+    for (path, note) in &old {
+        if !new.contains_key(path) {
             shared.publish(
                 generation,
                 EventKind::NoteDeleted {
@@ -480,14 +484,9 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
             );
         }
     }
-    for (id, note) in new {
-        let kind = match old.get(id) {
+    for (path, note) in new {
+        let kind = match old.get(path) {
             None => Some(EventKind::NoteCreated { note: note.clone() }),
-            Some(before) if before.path != note.path => Some(EventKind::NoteMoved {
-                note: note.clone(),
-                from: before.path.clone(),
-                previous_revision: before.revision.clone(),
-            }),
             Some(before) if before.revision != note.revision => Some(EventKind::NoteChanged {
                 note: note.clone(),
                 previous_revision: before.revision.clone(),

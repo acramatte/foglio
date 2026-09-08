@@ -2,7 +2,19 @@
 
 Status meanings: **Established** comes from the supplied brief; **Proposed** is a concrete planning default that needs acceptance before implementation; **Spike** needs technical evidence. Phase 0 bootstrap execution is recorded in [tasks](tasks.md); S01/S02, the S04 Linux watcher slice, and the S05 baseline now have evidence. Later editor/release gates remain open.
 
-## Established decisions
+## Accepted ordinary-Markdown amendment
+
+The user approved removing IDs after trying Phase 4. There is no legacy-user compatibility requirement. These choices supersede the original ID/adoption portions of D03, D04, D06, D14 and D15 below; those rows record history, not current contracts.
+
+| ID | Decision | Rationale |
+|---|---|---|
+| D26 | Library-relative paths identify documents; full-byte SHA-256 hashes identify revisions. Remove embedded-ID APIs, adoption and duplicate-ID ambiguity. Preserve arbitrary existing `id` metadata. | Ordinary repository specs/plans and notes must work without modifying source. Equal hashes do not establish identity. Known schema-1 cache is disposable; rebuild as schema 2, refuse future schemas. External moves are delete/create observations; no hash-only selection retargeting. |
+| D27 | Quiet footer “Monitoring external changes”; visible monitoring failures; separate future editor save state | Watcher activity is not autosave. |
+| D28 | Defer search UX changes and leave desktop creation/editing in Phase 5 | This amendment changes identity and monitoring presentation only. |
+
+Current behavior and verification: [path identity](path-identity.md).
+
+## Established decisions (historical where superseded)
 
 | ID | Decision | Rationale / source |
 |---|---|---|
@@ -78,7 +90,7 @@ Selection is non-adopting and persists the existing core configuration. A manage
 | D15 | CLI human output plus stable `--json`; explicit `id:` / `path:` selectors disambiguate; destructive CLI delete requires `--yes` or terminal confirmation | Scriptability and deliberate destruction; resolve in P1-06 |
 | D16 | Literal text search by default, explicit phrase/prefix modes, exact case-sensitive tag filter, component-aware folder filter | Avoid exposing raw FTS syntax accidentally; resolve in P2-02 |
 | D17 | Source editor and sanitized preview first; rich mode only if round-trip spike passes | Meet v1 without sacrificing Markdown preservation; resolve in P5-01 |
-| D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note with new ID; no blind force-overwrite | Preserve both versions without introducing history; resolve in P6-01 |
+| D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note at a new no-clobber path; no blind force-overwrite | Preserve both versions without introducing history; resolve in P6-01 |
 | D20 | No delete undo/history in v1; delete is a confirmed permanent filesystem removal | Source requires deletion but excludes history; make limitation visible; resolve in P1-06 |
 
 ## Evidence-required spikes
@@ -94,9 +106,9 @@ Selection is non-adopting and persists the existing core configuration. A manage
 ## Risks to keep visible
 
 1. Atomic replacement prevents partial files but is not an atomic compare-and-swap against arbitrary external editors. Hash checks narrow, not eliminate, the final check/write race. Cooperative locks protect Foglio processes only.
-2. Import adoption itself changes user files. Read-only/malformed/unstable input must be reported without destructive fallback. Adoption must recheck bytes before commit.
-3. Two synced devices may independently adopt the same missing-ID file. v1 has no distributed identity authority; establish IDs before initial sync where practical and preserve/report divergent results.
-4. Sync conflict copies often duplicate IDs. Treating them as ordinary Markdown still requires ambiguity handling, not silent regeneration.
+2. Unsupported/malformed/unstable input must remain untouched; report diagnostics without destructive fallback.
+3. Paths are not permanent identity across external moves. Without reliable move evidence, show the old path missing.
+4. Equal content hashes or metadata do not prove identity. Never retarget a dirty buffer or merge conflict copies using equality alone.
 5. Filesystem and SQLite cannot share a transaction. Durable file commit must not be reported as if nothing happened merely because indexing failed.
 6. Metadata-only warm scans can miss same-size/same-mtime edits while offline. Running watcher paths require content checks; full rescan/reindex is the definitive recovery. Document freshness limits rather than promising impossible cheap certainty.
 7. Mounts/network/cloud placeholder files may not support tested atomic/durability semantics. Detect/report unsupported behavior; do not claim all remote filesystems safe.
