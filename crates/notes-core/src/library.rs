@@ -152,6 +152,30 @@ impl Library {
         lib.cache_path()?;
         Ok(lib)
     }
+    /// Persist this validated existing root without adopting or changing notes.
+    /// Uses the same locked, revision-checked durable config format as CLI init.
+    pub fn select_existing(&self) -> Result<()> {
+        fs::check_chain(&self.root)?;
+        if !self.root.is_dir() {
+            return Err(Error::new(ErrorCode::Path, "library is not directory"));
+        }
+        let _selection = fs::lock(&self.state.join("selection.lock"))?;
+        let config = self.state.join("config.json");
+        let bytes = serde_json::to_vec(&self.root).map_err(|e| Error::new(ErrorCode::Config, e))?;
+        let expected = if config.exists() {
+            Some(revision(&fs::read(&config)?))
+        } else {
+            None
+        };
+        let outcome = fs::save(&config, &bytes, expected.as_ref())?;
+        if !outcome.durability_confirmed {
+            return Err(Error::committed(
+                "root selected but durability uncertain",
+                outcome,
+            ));
+        }
+        Ok(())
+    }
     pub fn init(root: &Path) -> Result<(Self, Report)> {
         let state = config_dir()?;
         let mut lib = Self::open(root, &state, true)?;

@@ -1,10 +1,10 @@
 # Implementation plan
 
-Status: Phase 0 complete locally and in hosted CI. Phases 1–3 implemented and verified locally on Linux; hosted CI for these changes is pending. Phase 4 onward is not started. See [Phase 1 evidence](phase1.md), [Phase 2 evidence](phase2.md), [Phase 3 evidence](phase3.md), and task status.
+Status: Phase 0 complete locally and in hosted CI. Phases 1–4 implemented and verified locally on Linux; hosted CI for these changes is pending. Phase 5 onward is not started. [Phase 4 native evidence and limits](phase4.md). See [Phase 1 evidence](phase1.md), [Phase 2 evidence](phase2.md), [Phase 3 evidence](phase3.md), and task status.
 
 ## Delivery strategy
 
-Build vertical slices, not dormant future layers. The first usable milestone covers **Phase 0 and Phase 1 only**. The initial request was Phase 0 only (historical D22). The user subsequently explicitly requested Phase 1 and approved its implementation defaults. The quoted first-delivery exclusions are historical: the user subsequently authorized Phases 2 and 3. The current delivery includes SQLite and the in-process watcher, but excludes Tauri, sync, encryption, and plugins.
+Build vertical slices, not dormant future layers. The first usable milestone covers **Phase 0 and Phase 1 only**. The initial request was Phase 0 only (historical D22). The user subsequently explicitly requested Phase 1 and approved its implementation defaults. The quoted first-delivery exclusions are historical: the user subsequently authorized Phases 2 and 3. The user subsequently authorized Phase 4: this delivery also includes the read-only Tauri client, but excludes editing, sync, encryption, and plugins.
 
 Requirements: [product](specs/product.md). Contracts: [technical](specs/technical.md). Work items: [tasks](tasks.md). Evidence: [verification](specs/verification.md). Proposed decisions: [register](decisions.md).
 

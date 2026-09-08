@@ -1,6 +1,6 @@
 # Technical specification
 
-Status: Phases 1–3 implemented and verified locally. [Phase 1](../phase1.md) records filesystem/parser contracts; [Phase 2](../phase2.md) records index/search APIs; [Phase 3](../phase3.md) records watcher lifetime, subscription ordering, shared-handle status, conservative full-content batching and recovery. Phase 4+ APIs below remain design contracts, not code. Normative requirements are in [product.md](product.md); choices are in the [decision register](../decisions.md).
+Status: Phases 1–4 implemented and verified locally. [Phase 1](../phase1.md) records filesystem/parser contracts; [Phase 2](../phase2.md) records index/search APIs; [Phase 3](../phase3.md) records watcher lifetime, subscription ordering, shared-handle status, conservative full-content batching and recovery. [Phase 4](../phase4.md) records the implemented read-only desktop commands, lifetime, rendering policy and native evidence. Phase 5+ APIs below remain design contracts, not code. Normative requirements are in [product.md](product.md); choices are in the [decision register](../decisions.md).
 
 ## 1. Workspace and boundaries
 

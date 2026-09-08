@@ -1,8 +1,8 @@
 # Foglio
 
-A local-first Markdown notes application with a headless Rust core and a working filesystem CLI. The Tauri desktop client is planned, not implemented.
+A local-first Markdown notes application with a headless Rust core, filesystem CLI, and read-only Tauri desktop client. Desktop editing is not implemented.
 
-**Status: Phases 1–3 implemented and verified locally on Linux x86_64.** See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+**Status: Phases 1–4 implemented and verified locally on Linux x86_64.** [Desktop setup and native verification](docs/phase4.md). See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
 Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
@@ -11,11 +11,11 @@ Markdown files are authoritative. SQLite is a disposable index. External editing
 Install [Rust using rustup](https://rustup.rs/). `rust-toolchain.toml` selects Rust 1.93.1 with rustfmt and Clippy. System-packaged Rust must provide that toolchain and both components separately.
 
 ```bash
-cargo build --locked --workspace
+cargo build --locked -p notes-core -p notes-cli
 cargo run --locked -p notes-cli -- --help
 cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-cargo test --locked --workspace --all-features
+cargo clippy --locked -p notes-core -p notes-cli --all-targets --all-features -- -D warnings
+cargo test --locked -p notes-core -p notes-cli --all-features
 python3 tests/acceptance/phase1.py
 python3 tests/acceptance/phase2.py
 ```
@@ -28,9 +28,17 @@ CI runs the locked build, Rust tests, Python acceptance harness, formatting, str
 
 Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearing replacement targets, ownership-changing replacements, symlinks and hard-link mutations are refused. Cooperative locks do not protect against arbitrary external-writer or hostile ancestor-swap races. Read the [safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before use. macOS and Windows remain unsupported.
 
+## Desktop
+
+Install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`. The built binary is `target/debug/foglio-desktop`; production builds use `target/release/foglio-desktop`. Enter an existing library path to browse folders, tags and search results with safe Markdown preview. Selection never adopts or modifies notes.
+
+```text
+Markdown → core index/watcher → Tauri commands → read-only navigation + sanitized preview
+```
+
 ## Scope and conventions
 
-This delivery completes **Phase 3 live reconciliation** locally on top of the filesystem/CLI and index milestones. The core owns recursive watching, bounded domain subscriptions and recovery; Phase 4 onward remains open. There is no daemon, Tauri, sync integration, encryption, or plugin scaffold.
+This delivery completes **Phase 4 read-only desktop** locally. Phase 5 editing onward remains open. No desktop mutations, autosave, daemon, sync integration, encryption, or plugin scaffold is included.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.

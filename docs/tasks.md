@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, and P3-01–P3-03 verified locally; hosted CI for Phases 1–3 pending. Phase 4 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, and P4-01–P4-04 verified locally; hosted CI for Phases 1–4 pending. Phase 5 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -101,10 +101,19 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P4-01 | P3-03 | Create `apps/desktop` Tauri/TypeScript app; select frontend framework/package manager; shared core lifetime, narrow DTOs, capability/CSP setup, frontend CI | Production frontend/Tauri build; actual window opens; core tests remain independently runnable; commands do not block UI under scan load (V18) |
-| [ ] | P4-02 | P4-01 | Implement selected-library onboarding, physical folder tree, notes/tags, opening, search and empty/error states | Real fixture root navigable; selections identify notes by ID, paths shown correctly; search/tag results open current disk content (V18) |
-| [ ] | P4-03 | P4-01 | Implement sanitized CommonMark/GFM preview, link policy, unsupported image fallback and security fixtures | Required Markdown renders; scripts/schemes/local traversal/remote image loads blocked in actual webview, original Markdown unchanged (V19) |
-| [ ] | P4-04 | P4-02, P4-03 | Wire watcher invalidation to lists/preview with error handling and lifecycle cleanup | External changes reflected while browsing; duplicate/unreadable/deleted records surfaced; close/reopen releases watchers cleanly (V18, V19) |
+| [x] | P4-01 | P3-03 | Create `apps/desktop` Tauri/TypeScript app; select frontend framework/package manager; shared core lifetime, narrow DTOs, capability/CSP setup, frontend CI | Production frontend/Tauri build; actual window opens; core tests remain independently runnable; commands do not block UI under scan load (V18) |
+| [x] | P4-02 | P4-01 | Implement selected-library onboarding, physical folder tree, notes/tags, opening, search and empty/error states | Real fixture root navigable; selections identify notes by ID, paths shown correctly; search/tag results open current disk content (V18) |
+| [x] | P4-03 | P4-01 | Implement sanitized CommonMark/GFM preview, link policy, unsupported image fallback and security fixtures | Required Markdown renders; scripts/schemes/local traversal/remote image loads blocked in actual webview, original Markdown unchanged (V19) |
+| [x] | P4-04 | P4-02, P4-03 | Wire watcher invalidation to lists/preview with error handling and lifecycle cleanup | External changes reflected while browsing; duplicate/unreadable/deleted records surfaced; close/reopen releases watchers cleanly (V18, V19) |
+
+## Phase 4 execution evidence
+
+- **Tasks/status:** P4-01–P4-04 verified locally on Linux. User authorized Phase 4 and installed missing native dependencies. No editing/autosave work included.
+- **Implementation/PR:** uncommitted working tree; no commit/push/PR. `apps/desktop` contains Tauri backend, typed TypeScript frontend, safe preview, tests and locked dependencies. Core adds non-adopting selection; CI separates native/headless gates.
+- **Tests:** `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`, `cargo test --locked --workspace --all-features`, scoped core/CLI build, both existing Python acceptance suites, `npm test` (16 passing), `npm run typecheck`, production frontend and debug/release Tauri builds, and diff checks passed. Desktop backend has six passing tests.
+- **Acceptance:** `TAURI_DRIVER=/tmp/foglio-phase4-tools/bin/tauri-driver python3 tests/acceptance/phase4.py` passes against the actual debug application; the same harness with `FOGLIO_DESKTOP_BINARY=/home/alexis/Development/private/foglio/target/release/foglio-desktop` passes against the optimized production application. V18/V19 cover navigation, folders/tags/FTS, byte preservation, safe rendering/links, external edits/moves/deletion, ambiguity/unreadability/recovery, and close/reopen. Loopback image trap receives zero requests.
+- **Review/decisions:** plain TypeScript/Vite/npm, Tauri 2, Marked/DOMPurify allowlist, narrow IPC and read-only selection. Fixed review findings for navigation during refresh and frontend/backend link-policy disagreement; added regression tests. [Detailed setup, architecture and evidence](phase4.md).
+- **Limitations:** hosted CI pending; Linux/WebKit/Xvfb only, no manual accessibility or physical-display evidence, installers, other OSes, cross-device sync or large-corpus performance claims. Existing whole-library scan behavior remains visible and P7 performance work remains open.
 
 ## Phase 5 — Editor and autosave
 

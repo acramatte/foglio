@@ -1,5 +1,6 @@
 [workspace]
-members = ["crates/notes-core", "crates/notes-cli"]
+members = ["crates/notes-core", "crates/notes-cli", "apps/desktop/src-tauri"]
+default-members = ["crates/notes-core", "crates/notes-cli"]
 resolver = "3"
 
 [workspace.package]

@@ -60,6 +60,12 @@ The user explicitly authorized Phase 3. S04 is verified on Linux/tmpfs with inde
 - Reconcile full content per dirty batch and periodically, preserving complete identity/unknown-coverage invariants. Default 75 ms debounce, 500 ms maximum batching delay and 30-second safety interval are tunable policies, not benchmark guarantees. Large-library watcher measurements remain P7.
 - Publish committed, body-free revisions; consume initial/overflow invalidation before refetching. Track native backend lifetimes on the shared library handle; do not imply daemon or cross-process status.
 
+## Phase 4 implementation choices
+
+User authorized the read-only desktop and installed native prerequisites. P4 uses Tauri 2 with plain TypeScript/Vite and npm lockfiles, avoiding an unnecessary frontend framework for this view. Marked plus DOMPurify provides escaped raw HTML and an explicit safe GFM allowlist. Native links use narrow Rust commands, not broad filesystem/shell/opener plugin capabilities.
+
+Selection is non-adopting and persists the existing core configuration. A managed backend owns watcher subscriptions; blocking workers serialize core operations while cached state stays independent. The frontend polls session/generation state and discards stale responses. Production native WebKit/Xvfb acceptance is recorded in [Phase 4](phase4.md); editing, native installers and other OS targets remain excluded.
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |

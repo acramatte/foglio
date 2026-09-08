@@ -19,11 +19,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Strict Clippy
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked -p notes-core -p notes-cli --all-targets --all-features -- -D warnings
       - name: Build core and CLI
-        run: cargo build --locked --workspace
-      - name: Workspace tests
-        run: cargo test --locked --workspace --all-features
+        run: cargo build --locked -p notes-core -p notes-cli
+      - name: Core and CLI tests
+        run: cargo test --locked -p notes-core -p notes-cli --all-features
       - name: Phase 1 filesystem and CLI acceptance
         run: python3 tests/acceptance/phase1.py
       - name: Phase 2 index and search acceptance
@@ -39,3 +39,37 @@ jobs:
           env -i HOME="$sandbox/home" XDG_CONFIG_HOME="$sandbox/config" \
             XDG_CACHE_HOME="$sandbox/cache" XDG_DATA_HOME="$sandbox/data" \
             "$binary" --help
+  desktop:
+    name: Read-only desktop (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.18.0'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - name: Install native desktop prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb xauth webkit2gtk-driver
+          rustup show active-toolchain
+      - name: Frontend dependencies and checks
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+      - name: Desktop Rust tests and lint
+        run: |
+          cargo test --locked -p notes-desktop
+          cargo clippy --locked -p notes-desktop --all-targets -- -D warnings
+      - name: Build actual desktop
+        working-directory: apps/desktop
+        run: npm run tauri -- build --no-bundle
+      - name: Native WebKit acceptance
+        run: |
+          cargo install tauri-driver --version 2.0.6 --locked
+          FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase4.py
