@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, and P4-01–P4-04 verified locally; hosted CI for Phases 1–4 pending. Phase 5 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, P4-01–P4-04, and P5-01–P5-04 verified locally; hosted CI for Phases 1–5 pending. Phase 6 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -127,10 +127,19 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P5-01 | P4-04 | Run S03 editor round-trip spike; record D17; implement source/preview baseline and optional proven rich mode | Markdown fixtures preserve unsupported syntax and unknown frontmatter; rich mode omitted if preservation fails (V20) |
-| [ ] | P5-02 | P5-01 | Implement per-note debounced autosave state machine, generation/revision tracking, save error UI and stale-save pause | Edits during in-flight saves not marked saved prematurely; stale core write cannot overwrite newer disk; unsaved buffer survives save failure (V21) |
-| [ ] | P5-03 | P5-02 | Add desktop create/move/rename/delete/tag controls using core; explicit permanent-delete confirmation | End-to-end desktop file lifecycle and explicit selected-path updates pass; no frontend filesystem reimplementation (V22) |
-| [ ] | P5-04 | P5-02 | Protect switching notes, navigation and window close with pending saves; keyboard source/preview affordances | Navigation flushes or stays/cancels with explicit choice; close cannot silently discard known dirty buffer; manual smoke plus automated state tests (V20, V21) |
+| [x] | P5-01 | P4-04 | Run S03 editor round-trip spike; record D17; implement source/preview baseline and optional proven rich mode | Markdown fixtures preserve unsupported syntax and unknown frontmatter; rich mode omitted if preservation fails (V20) |
+| [x] | P5-02 | P5-01 | Implement per-note debounced autosave state machine, generation/revision tracking, save error UI and stale-save pause | Edits during in-flight saves not marked saved prematurely; stale core write cannot overwrite newer disk; unsaved buffer survives save failure (V21) |
+| [x] | P5-03 | P5-02 | Add desktop create/move/rename/delete/tag controls using core; explicit permanent-delete confirmation | End-to-end desktop file lifecycle and explicit selected-path updates pass; no frontend filesystem reimplementation (V22) |
+| [x] | P5-04 | P5-02 | Protect switching notes, navigation and window close with pending saves; keyboard source/preview affordances | Navigation flushes or stays/cancels with explicit choice; close cannot silently discard known dirty buffer; manual smoke plus automated state tests (V20, V21) |
+
+## Phase 5 execution evidence
+
+- **Tasks/status:** P5-01–P5-04 verified locally on Linux. User explicitly authorized Phase 5 and the three review corrections. Hosted CI pending.
+- **Decision changes:** S03 rejects default Milkdown 7.22.1 rich serialization; D17 resolves to source body + sanitized preview. Unknown supported YAML stays outside the editor. Native close flushes or stays; no discard/force-write path added.
+- **Implementation/PR:** uncommitted working tree, no push or PR. Source editor/state machine, typed guarded Tauri mutation commands, lifecycle dialogs, close handshake, narrow event capabilities and CI acceptance step. [Detailed evidence and limitations](phase5.md).
+- **Tests:** workspace fmt/tests/strict Clippy; frontend tests (33 passing), typecheck and build; debug/optimized native builds; Phase 1/2 CLI acceptance (12 + 4); Phase 4 native regression and Phase 5 native acceptance (8 scenarios) pass. Exact commands in Phase 5 evidence.
+- **Acceptance:** V20/V21/V22 real file lifecycle, actual keyboard source edit, supported metadata/BOM/CRLF and mixed-newline preservation, error/retry, stale/missing buffers and real WM_DELETE_WINDOW flush/block behavior. Independent-review overlap/deferred-refresh/newline regressions failed before fixes and pass afterward. Scripted native interaction replaces a separate manual physical-display smoke for this local gate; physical-display/accessibility review remains P7.
+- **Limitations:** source-only editor, no Phase 6 reload/save-copy choices, no durable crash drafts/history, no hosted CI/installer/other-OS/large-corpus claim. Existing filesystem races and supported-YAML limits remain.
 
 ## Phase 6 — External-change experience
 

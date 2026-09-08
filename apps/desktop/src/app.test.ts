@@ -9,10 +9,55 @@ function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promi
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
 function setup(overrides:Partial<Api> = {}) {
- const api:Api = {state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
+ const api:Api = {save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
-describe("read-only UI state", () => {
+describe("desktop UI state", () => {
+ it("retains the mutation lock through its follow-up open",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const opened=deferred<Note>();const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"one.md",revision:"r1",file_committed:true,warnings:[]}),open:vi.fn((_s,path)=>path==="one.md"?opened.promise:Promise.resolve(note(path)))});
+  await app.start();await app.open("a.md");host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!.value="one.md";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.open).toHaveBeenCalledWith(1,"one.md"));host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();await Promise.resolve();
+  expect(host.querySelector("dialog")).toBeNull();expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(true);
+  opened.resolve(note("one.md"));await vi.waitFor(()=>expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(false));expect(api.create).toHaveBeenCalledOnce();
+ });
+ it("retries a dirty deferred watcher refresh after local reversion",async()=>{
+  const {host,api}=setup();await app.start();await app.open("a.md");const source=host.querySelector<HTMLTextAreaElement>("textarea")!;
+  source.value="local";source.dispatchEvent(new Event("input"));vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});vi.mocked(api.open).mockResolvedValue({...note("a.md","external"),revision:"external"});await app.poll();
+  source.value="a.md";source.dispatchEvent(new Event("input"));await app.poll();expect(source.value).toBe("external");expect(host.querySelector("article")?.textContent).toContain("external");
+ });
+ it("flushes before note navigation and protects the buffer during watcher refresh",async()=>{
+  const saved=deferred<Awaited<ReturnType<Api['save']>>>();const {host,api}=setup({save:()=>saved.promise});await app.start();await app.open("a.md");
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="new local";source.dispatchEvent(new Event("input"));
+  vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});await app.poll();
+  expect(source.value).toBe("new local");expect(api.open).toHaveBeenCalledTimes(1);
+  const navigation=app.open("b.md");expect(source.readOnly).toBe(true);expect(api.open).not.toHaveBeenCalledWith(1,"b.md");
+  saved.resolve({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]});await navigation;
+  expect(api.open).toHaveBeenLastCalledWith(1,"b.md");
+ });
+ it("rejects a watcher read that predates a completed save",async()=>{
+  const disk=deferred<Note>();const {host,api}=setup();await app.start();await app.open("a.md");
+  vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});vi.mocked(api.open).mockReturnValue(disk.promise);
+  const refresh=app.poll();await Promise.resolve();await Promise.resolve();
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="new local";source.dispatchEvent(new Event("input"));
+  host.dispatchEvent(new KeyboardEvent("keydown",{key:"s",ctrlKey:true}));await Promise.resolve();await Promise.resolve();await Promise.resolve();
+  disk.resolve(note("a.md","stale disk"));await refresh;
+  expect(source.value).toBe("new local");expect(host.querySelector("article")?.textContent).toContain("new local");
+ });
+ it("waits for a save before completing native close",async()=>{
+  const saved=deferred<Awaited<ReturnType<Api['save']>>>();const {host,api}=setup({save:()=>saved.promise});await app.start();await app.open("a.md");
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="last edit";source.dispatchEvent(new Event("input"));
+  const closing=app.requestClose();expect(api.close).not.toHaveBeenCalled();saved.resolve({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]});await closing;expect(api.close).toHaveBeenCalledOnce();
+ });
+ it("cancels failed navigation and close without discarding source",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const {host,api}=setup({save:vi.fn().mockRejectedValue({code:"io",message:"denied"})});await app.start();await app.open("a.md");
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="retained";source.dispatchEvent(new Event("input"));
+  const navigation=app.open("b.md");await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLButtonElement>("[data-testid=dialog-cancel]")!.click();await navigation;
+  expect(api.open).not.toHaveBeenCalledWith(1,"b.md");expect(source.value).toBe("retained");
+  const closing=app.requestClose();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLButtonElement>("[data-testid=dialog-cancel]")!.click();await closing;expect(api.close).not.toHaveBeenCalled();expect(source.value).toBe("retained");
+ });
  it("keeps navigation safe while a generation refresh is pending", async() => {
   const pending = deferred<Browse>(); const {host,api}=setup(); await app.start();
   vi.mocked(api.state).mockResolvedValue({...state,generation:2});

@@ -1,6 +1,6 @@
 # Verification specification
 
-Status: V01–V10 Phase 1 checks and V11–V15 Phase 2 checks (V14 status portion only), plus V25 initial baseline, pass locally on Linux x86_64 with Rust 1.93.1; see [Phase 1](../phase1.md#verification-evidence) and [Phase 2 evidence/limitations](../phase2.md). V16/V17 and the V24 development simulation now pass: [Phase 3 evidence](../phase3.md). Hosted CI currently covers Phase 0 only. V18/V19 Phase 4 pass in actual Tauri/WebKit under Xvfb; see [desktop evidence and limits](../phase4.md). Doctor, editing, actual cross-device sync and release checks remain planned and unrun.
+Status: V01–V10 Phase 1 checks and V11–V15 Phase 2 checks (V14 status portion only), plus V25 initial baseline, pass locally on Linux x86_64 with Rust 1.93.1; see [Phase 1](../phase1.md#verification-evidence) and [Phase 2 evidence/limitations](../phase2.md). V16/V17 and the V24 development simulation now pass: [Phase 3 evidence](../phase3.md). Hosted CI currently covers Phase 0 only. V18/V19 Phase 4 pass in actual Tauri/WebKit under Xvfb; see [desktop evidence and limits](../phase4.md). V20–V22 Phase 5 source editing/autosave/lifecycle pass locally, including actual WebKit keyboard edits and native-close protection; see [Phase 5 evidence](../phase5.md). Doctor, full conflict choices, actual cross-device sync and release checks remain planned and unrun.
 
 ## Test discipline
 

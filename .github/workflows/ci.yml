@@ -40,7 +40,7 @@ jobs:
             XDG_CACHE_HOME="$sandbox/cache" XDG_DATA_HOME="$sandbox/data" \
             "$binary" --help
   desktop:
-    name: Read-only desktop (Linux)
+    name: Desktop (Linux)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -73,3 +73,4 @@ jobs:
         run: |
           cargo install tauri-driver --version 2.0.6 --locked
           FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase4.py
+          FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase5.py

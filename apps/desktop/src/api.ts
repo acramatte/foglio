@@ -38,7 +38,20 @@ export interface Note {
   body: string;
   revision: string;
 }
+export interface Mutation {
+  session: number;
+  path: string;
+  revision: string | null;
+  file_committed: boolean;
+  warnings: string[];
+}
 export interface Api {
+  save(session: number, path: string, revision: string, body: string): Promise<Mutation>;
+  create(session: number, path: string, title: string, body: string, tags: string[]): Promise<Mutation>;
+  move(session: number, path: string, revision: string, destination: string): Promise<Mutation>;
+  delete(session: number, path: string, revision: string): Promise<Mutation>;
+  tag(session: number, path: string, revision: string, tag: string, add: boolean): Promise<Mutation>;
+  close(): Promise<void>;
   state(): Promise<DesktopState>;
   select(path: string): Promise<DesktopState>;
   browse(session: number): Promise<Browse>;
@@ -57,6 +70,12 @@ export interface Api {
   external(url: string): Promise<void>;
 }
 export const api: Api = {
+  save: (session, path, revision, body) => invoke("save_note", {session, path, revision, body}),
+  create: (session, path, title, body, tags) => invoke("create_note", {session, path, title, body, tags}),
+  move: (session, path, revision, destination) => invoke("move_note", {session, path, revision, destination}),
+  delete: (session, path, revision) => invoke("delete_note", {session, path, revision}),
+  tag: (session, path, revision, tag, add) => invoke("change_tag", {session, path, revision, tag, add}),
+  close: () => invoke("finish_close"),
   state: () => invoke("desktop_state"),
   select: (path) => invoke("select_library", { path }),
   browse: (session) => invoke("browse_library", { session }),

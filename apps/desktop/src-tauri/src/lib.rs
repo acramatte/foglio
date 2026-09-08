@@ -1,4 +1,4 @@
-//! Read-only desktop boundary. Slow core work and watcher joins run on blocking workers.
+//! Desktop boundary. Slow core work and watcher joins run on blocking workers.
 use notes_core::{
     Library,
     library::{Diagnostic, NoteSummary},
@@ -19,6 +19,78 @@ use std::{
 pub type Result<T> = std::result::Result<T, String>;
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
+}
+
+/// Mutation failures cross IPC as JSON strings, never human-message parsing.
+fn mutation_error(code: &str, message: impl std::fmt::Display) -> String {
+    serde_json::json!({"code": code, "message": message.to_string()}).to_string()
+}
+fn core_error(error: notes_core::Error) -> String {
+    mutation_error(error.code.as_str(), error.message)
+}
+
+#[derive(Debug, Serialize)]
+pub struct Mutation {
+    pub session: u64,
+    pub path: String,
+    pub revision: Option<String>,
+    pub file_committed: bool,
+    pub warnings: Vec<String>,
+}
+impl Mutation {
+    fn from_commit(
+        session: u64,
+        path: &str,
+        result: notes_core::Result<notes_core::filesystem::Commit>,
+    ) -> Result<Self> {
+        let mut warnings = Vec::new();
+        let commit = match result {
+            Ok(commit) => commit,
+            Err(error) => match error.commit {
+                Some(commit) if commit.file_committed => {
+                    warnings.push(error.message);
+                    commit
+                }
+                _ => return Err(core_error(error)),
+            },
+        };
+        if !commit.durability_confirmed {
+            warnings.push("File committed, but filesystem durability is not confirmed".into());
+        }
+        // Core captures the committed bytes' revision before index/watch work.
+        // Never reread here: an external writer may already have replaced them.
+        Ok(Self {
+            session,
+            path: path.into(),
+            revision: commit.revision.map(|r| r.to_string()),
+            file_committed: commit.file_committed,
+            warnings,
+        })
+    }
+}
+
+fn expected_revision(
+    library: &Library,
+    path: &str,
+    supplied: &str,
+) -> Result<notes_core::Revision> {
+    if supplied.len() != 64
+        || !supplied
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    {
+        return Err(mutation_error(
+            "usage",
+            "revision must be 64 lowercase hexadecimal characters",
+        ));
+    }
+    // Revision deliberately has no public constructor. Match the literal token,
+    // then pass the typed snapshot to core, which rechecks under its write lock.
+    let revision = library.get(path).map_err(core_error)?.document.revision;
+    if revision.to_string() != supplied {
+        return Err(mutation_error("conflict", "note revision changed"));
+    }
+    Ok(revision)
 }
 
 #[derive(Clone, Default, Debug, Serialize)]
@@ -191,12 +263,14 @@ impl Backend {
     ) -> Result<T> {
         let selected = self.inner.selection.lock().unwrap();
         if self.inner.stopping.load(Ordering::Acquire) {
-            return Err("desktop is closing".into());
+            return Err(mutation_error("closing", "desktop is closing"));
         }
         if self.state().session != session {
-            return Err("stale library session".into());
+            return Err(mutation_error("stale_session", "stale library session"));
         }
-        let selected = selected.as_ref().ok_or("select a library first")?;
+        let selected = selected
+            .as_ref()
+            .ok_or_else(|| mutation_error("no_library", "select a library first"))?;
         refresh(&self.inner, selected);
         f(selected)
     }
@@ -258,6 +332,82 @@ impl Backend {
                 body: d.body,
                 revision: d.revision,
             })
+        })
+    }
+    pub fn save(&self, session: u64, path: &str, revision: &str, body: &str) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            let expected = expected_revision(&s.library, path, revision)?;
+            Mutation::from_commit(session, path, s.library.update(path, &expected, body))
+        })
+    }
+    pub fn create(
+        &self,
+        session: u64,
+        path: &str,
+        title: &str,
+        body: &str,
+        tags: &[String],
+    ) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            if title.trim().is_empty() || title.chars().any(char::is_control) {
+                return Err(mutation_error(
+                    "usage",
+                    "title must be a nonempty single line",
+                ));
+            }
+            // Like CLI new: supplied source wins; title supplies the empty-note heading.
+            let initial;
+            let body = if body.is_empty() {
+                initial = format!("# {title}\n");
+                &initial
+            } else {
+                body
+            };
+            match s.library.create(path, body, tags) {
+                Ok(entry) => Ok(Mutation {
+                    session,
+                    path: entry.path,
+                    revision: Some(entry.document.revision.to_string()),
+                    file_committed: true,
+                    warnings: Vec::new(),
+                }),
+                Err(error) => Mutation::from_commit(session, path, Err(error)),
+            }
+        })
+    }
+    pub fn move_note(
+        &self,
+        session: u64,
+        path: &str,
+        revision: &str,
+        destination: &str,
+    ) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            let expected = expected_revision(&s.library, path, revision)?;
+            Mutation::from_commit(
+                session,
+                destination,
+                s.library.move_note(path, &expected, destination),
+            )
+        })
+    }
+    pub fn delete(&self, session: u64, path: &str, revision: &str) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            let expected = expected_revision(&s.library, path, revision)?;
+            Mutation::from_commit(session, path, s.library.delete(path, &expected))
+        })
+    }
+    pub fn change_tag(
+        &self,
+        session: u64,
+        path: &str,
+        revision: &str,
+        tag: &str,
+        add: bool,
+    ) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            let expected = expected_revision(&s.library, path, revision)?;
+            Mutation::from_commit(session, path, s.library.tag(path, &expected, tag, add))
         })
     }
     pub fn resolve_link(&self, session: u64, from: &str, target: &str) -> Result<Resolved> {
@@ -405,3 +555,47 @@ pub fn external_url(input: &str) -> Result<url::Url> {
 
 mod commands;
 pub use commands::run;
+
+#[cfg(test)]
+mod mutation_tests {
+    use super::*;
+    use notes_core::filesystem::{Stage, save_observed};
+
+    #[test]
+    fn committed_dto_keeps_our_revision_after_external_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("a.md");
+        let commit = save_observed(&path, b"our saved bytes", None, |stage| {
+            if stage == Stage::AfterReplace {
+                std::fs::write(&path, b"external replacement")?;
+                return Err(notes_core::Error::new(
+                    notes_core::ErrorCode::Io,
+                    "sync failed",
+                ));
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert!(!commit.durability_confirmed);
+        for outcome in [
+            Ok(commit.clone()),
+            Err(notes_core::Error::committed(
+                "index unavailable after save",
+                commit,
+            )),
+        ] {
+            let dto = Mutation::from_commit(7, "a.md", outcome).unwrap();
+            assert!(dto.file_committed);
+            assert!(!dto.warnings.is_empty());
+            assert_eq!(
+                dto.revision,
+                Some(notes_core::revision(b"our saved bytes").to_string())
+            );
+            assert_ne!(
+                dto.revision,
+                Some(notes_core::revision(&std::fs::read(&path).unwrap()).to_string())
+            );
+            assert_eq!(dto.path, "a.md");
+        }
+    }
+}

@@ -1,5 +1,11 @@
 use super::*;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
+
+#[derive(Default)]
+struct CloseState {
+    finishing: AtomicBool,
+    finished: AtomicBool,
+}
 
 async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> Result<T> + Send + 'static,
@@ -38,6 +44,90 @@ async fn open_note(backend: State<'_, Arc<Backend>>, session: u64, path: String)
     let backend = backend.inner().clone();
     blocking(move || backend.open(session, &path)).await
 }
+async fn mutation_blocking(
+    work: impl FnOnce() -> Result<Mutation> + Send + 'static,
+) -> Result<Mutation> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| mutation_error("internal", e))?
+}
+#[tauri::command]
+async fn save_note(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    revision: String,
+    body: String,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || backend.save(session, &path, &revision, &body)).await
+}
+#[tauri::command]
+async fn create_note(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    title: String,
+    body: String,
+    tags: Vec<String>,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || backend.create(session, &path, &title, &body, &tags)).await
+}
+#[tauri::command]
+async fn move_note(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    revision: String,
+    destination: String,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || backend.move_note(session, &path, &revision, &destination)).await
+}
+#[tauri::command]
+async fn delete_note(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    revision: String,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || backend.delete(session, &path, &revision)).await
+}
+#[tauri::command]
+async fn change_tag(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    revision: String,
+    tag: String,
+    add: bool,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || backend.change_tag(session, &path, &revision, &tag, add)).await
+}
+/// Only the frontend's successful flush/discard decision may authorize exit.
+#[tauri::command]
+async fn finish_close(
+    app: tauri::AppHandle,
+    backend: State<'_, Arc<Backend>>,
+    close: State<'_, Arc<CloseState>>,
+) -> Result<()> {
+    if close.finishing.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
+    let backend = backend.inner().clone();
+    let close = close.inner().clone();
+    let result = tauri::async_runtime::spawn_blocking(move || backend.shutdown()).await;
+    if let Err(error) = result {
+        close.finishing.store(false, Ordering::Release);
+        return Err(mutation_error("internal", error));
+    }
+    close.finished.store(true, Ordering::Release);
+    app.exit(0);
+    Ok(())
+}
 #[tauri::command]
 async fn resolve_note_link(
     backend: State<'_, Arc<Backend>>,
@@ -60,6 +150,18 @@ pub fn run() {
     let startup = backend.clone();
     let app = tauri::Builder::default()
         .manage(backend.clone())
+        .manage(Arc::new(CloseState::default()))
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && !window
+                    .state::<Arc<CloseState>>()
+                    .finished
+                    .load(Ordering::Acquire)
+            {
+                api.prevent_close();
+                let _ = window.emit("close-requested", ());
+            }
+        })
         .setup(move |_| {
             tauri::async_runtime::spawn_blocking(move || startup.bootstrap());
             Ok(())
@@ -70,29 +172,28 @@ pub fn run() {
             browse_library,
             search_notes,
             open_note,
+            save_note,
+            create_note,
+            move_note,
+            delete_note,
+            change_tag,
+            finish_close,
             resolve_note_link,
             open_external_link
         ])
         .build(tauri::generate_context!())
         .expect("build Foglio desktop");
-    let closing = Arc::new(AtomicBool::new(false));
-    let finished = Arc::new(AtomicBool::new(false));
     app.run(move |app, event| {
         if let tauri::RunEvent::ExitRequested { api, .. } = event {
-            if finished.load(Ordering::Acquire) {
+            if app
+                .state::<Arc<CloseState>>()
+                .finished
+                .load(Ordering::Acquire)
+            {
                 return;
             }
             api.prevent_exit();
-            if !closing.swap(true, Ordering::AcqRel) {
-                let backend = app.state::<Arc<Backend>>().inner().clone();
-                let app = app.clone();
-                let finished = finished.clone();
-                tauri::async_runtime::spawn_blocking(move || {
-                    backend.shutdown();
-                    finished.store(true, Ordering::Release);
-                    app.exit(0);
-                });
-            }
+            let _ = app.emit("close-requested", ());
         }
     });
 }

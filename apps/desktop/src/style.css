@@ -343,6 +343,20 @@ footer {
   font-size: 10px;
   letter-spacing: 0.5px;
 }
+[hidden] { display: none !important; }
+.editor-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
+.editor-tools button, .new-note, dialog button { border: 1px solid #d4d8ce; border-radius: 5px; padding: 7px 10px; background: #f1f3ed; color: inherit; }
+.editor-tools button[aria-pressed="true"] { background: #dfe7db; }
+.new-note { margin: 14px 18px 0; }
+.save-status { padding: 3px 24px 10px; font-size: 12px; color: #365c49; }
+.save-error { white-space: pre-wrap; padding: 12px 24px; background: #fff0df; color: #8b3c24; }
+.source { flex: 1; min-height: 150px; resize: none; border: 0; border-top: 1px solid #eeeee7; padding: 24px; font: 13px/1.8 ui-monospace, monospace; color: inherit; background: transparent; tab-size: 2; }
+.source:focus-visible { outline: 2px solid #3f7460; outline-offset: -2px; }
+dialog { color: inherit; background: #fffefb; border: 1px solid #d4d8ce; border-radius: 8px; max-width: 480px; padding: 24px; }
+dialog::backdrop { background: #29352f66; }
+dialog h2 { margin: 0 0 16px; font-size: 18px; }
+dialog label, dialog input { display: block; width: 100%; margin-bottom: 12px; }
+dialog button { margin: 12px 8px 0 0; }
 @media (max-width: 1000px) {
   .workspace {
     grid-template-columns: 170px 250px minmax(0, 1fr);

@@ -78,6 +78,12 @@ User authorized the read-only desktop and installed native prerequisites. P4 use
 
 Selection is non-adopting and persists the existing core configuration. A managed backend owns watcher subscriptions; blocking workers serialize core operations while cached state stays independent. The frontend polls session/generation state and discards stale responses. Production native WebKit/Xvfb acceptance is recorded in [Phase 4](phase4.md); editing, native installers and other OS targets remain excluded.
 
+## Phase 5 implementation choices
+
+The user authorized Phase 5 and review corrections. **D17 resolved:** source-body editor plus existing sanitized preview; no rich mode. S03's real Milkdown 7.22.1 parser/model-transaction/serializer spike lost fence metadata and changed unsupported directives/reference structure. Source updates preserve frontmatter outside the editor, map sequential textarea changes against current raw source and keep exact saved bytes for no-op/reversion. See [evidence](phase5.md).
+
+Autosave uses a 400 ms debounce with per-selected-note serialized revision/generation snapshots. Native close is a frontend flush handshake followed by blocking watcher shutdown. Failed operations retain buffers; stale/missing paths never force overwrite/recreate. Lifecycle operations retain their navigation lock through follow-up reads. D19 conflict choices remain Phase 6. No new rich-editor dependencies or broad filesystem/shell permissions were added.
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |

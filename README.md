@@ -3,9 +3,9 @@ id: 01M20M73Q6C0R4R3WGC69H8FDD
 ---
 # Foglio
 
-A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and read-only Tauri desktop client. Desktop editing is not implemented.
+A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and Tauri desktop source editor with guarded autosave.
 
-**Status: Phases 1–4 implemented and verified locally on Linux x86_64.** [Desktop setup and native verification](docs/phase4.md). See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+**Status: Phases 1–5 implemented and verified locally on Linux x86_64.** [Editing, autosave and verification](docs/phase5.md). [Desktop setup and native verification](docs/phase4.md). See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
 Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
@@ -36,14 +36,15 @@ Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearin
 Install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`. The built binary is `target/debug/foglio-desktop`; production builds use `target/release/foglio-desktop`. Enter an existing library path to browse folders, tags and search results with safe Markdown preview. Selection and `init` never modify Markdown. Supported files need no frontmatter or IDs. Paths identify documents; hashes protect revisions. Existing `id` metadata is preserved without identity semantics. External moves leave the old selection unavailable rather than silently following matching content. See the [identity contract and verification](docs/path-identity.md).
 
 ```text
-Markdown → core index/watcher → Tauri commands → read-only navigation + sanitized preview
+Markdown → core index/watcher → Tauri commands → navigation + source/preview
+Source buffer → revision-guarded autosave → core atomic file write → derived index
 ```
 
-Healthy monitoring status is a quiet footer indicator, separate from saving. Search behavior is unchanged; desktop creation/editing and autosave remain Phase 5.
+Healthy monitoring is a quiet footer indicator, separate from save status. Use New note and the Source/Preview controls to edit, with Ctrl+E to toggle and Ctrl+S to flush. Autosave preserves frontmatter; tags, move/rename and permanent deletion have separate controls. Failed saves retain your source and block navigation/close. Stale or missing files pause autosave; Phase 6's reload/discard and save-copy choices remain open. Search behavior is unchanged.
 
 ## Scope and conventions
 
-This delivery completes **Phase 4 read-only desktop** locally. Phase 5 editing onward remains open. No desktop mutations, autosave, daemon, sync integration, encryption, or plugin scaffold is included.
+This delivery completes **Phase 5 source editing and autosave** locally. Phase 6 conflict-resolution UX and Phase 7 release hardening remain open. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.

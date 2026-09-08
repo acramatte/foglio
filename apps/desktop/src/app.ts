@@ -6,6 +6,7 @@ import {
   errorText,
 } from "./api";
 import { classifyLink, renderMarkdown } from "./markdown";
+import { Editor } from "./editor";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -18,6 +19,15 @@ function element<K extends keyof HTMLElementTagNameMap>(
   return el;
 }
 export class App {
+  private editor: Editor | null = null;
+  private busy = false;
+  private pendingRefresh = false;
+  private mode: "source" | "preview" = "preview";
+  private readonly source = element("textarea", undefined, "source");
+  private readonly saveStatus = element("span", "", "save-status");
+  private readonly saveError = element("div", "", "save-error");
+  private readonly tools = element("div", undefined, "editor-tools");
+  private readonly retry = element("button", "Retry save");
   private state: DesktopState | null = null;
   private browse: Browse | null = null;
   private note: Note | null = null;
@@ -92,7 +102,10 @@ export class App {
     });
     this.list.dataset.testid = "note-list";
     this.list.setAttribute("aria-live", "polite");
-    middle.append(this.search, this.count, this.list);
+    const create = element("button", "New note", "new-note");
+    create.dataset.testid="new-note";
+    create.addEventListener("click",()=>{void this.mutate("create");});
+    middle.append(create, this.search, this.count, this.list);
     const reader = element("section", undefined, "reader");
     reader.setAttribute("aria-label", "Note reader");
     this.preview.dataset.testid = "preview";
@@ -103,14 +116,39 @@ export class App {
     this.preview.addEventListener("auxclick", (event) =>
       event.preventDefault(),
     );
-    reader.append(this.metadata, this.preview);
+    this.source.dataset.testid="source";
+    this.source.setAttribute("aria-label", "Markdown source (body only)");
+    this.source.spellcheck=false;
+    this.source.addEventListener("input",()=>{this.editor?.edit(this.source.value);});
+    for (const mode of ["source", "preview"] as const) {
+      const button=element("button",mode === "source" ? "Source" : "Preview");
+      button.dataset.testid=mode+"-mode";
+      button.addEventListener("click",()=>this.setMode(mode));
+      this.tools.append(button);
+    }
+    for (const [action,label] of [["move","Move / rename"],["tag","Add tag"],["untag","Remove tag"],["delete","Delete note"]] as const) {
+      const button=element("button",label);button.dataset.testid=action+"-note";
+      button.addEventListener("click",()=>{void this.mutate(action);});this.tools.append(button);
+    }
+    this.saveStatus.dataset.testid="save-status";
+    this.saveStatus.setAttribute("role","status");
+    this.saveError.dataset.testid="save-error";
+    this.saveError.setAttribute("role","alert");
+    this.retry.addEventListener("click",()=>{void this.editor?.retry();});
+    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.source, this.preview);
+    host.addEventListener("keydown",(event)=>{
+      if (!(event.ctrlKey || event.metaKey)) return;
+      if (event.key.toLowerCase()==="s") {event.preventDefault();void this.editor?.flush();}
+      if (event.key.toLowerCase()==="e") {event.preventDefault();this.setMode(this.mode==="source"?"preview":"source");}
+    });
+    this.renderEditor();
     workspace.append(sidebar, middle, reader);
     this.diagnostics.dataset.testid = "diagnostics";
     const footer = element("footer");
     this.status.title =
-      "Monitors changes made by external editors and sync tools. Foglio does not save or edit files.";
+      "Monitors changes made by external editors and sync tools. Save status is shown separately.";
     footer.append(
-      element("span", "READ ONLY · Edit in your favorite text editor."),
+      element("span", "Markdown source · Ctrl+E source/preview · Ctrl+S save"),
       this.status,
     );
     host.append(
@@ -123,7 +161,7 @@ export class App {
     );
     this.empty(
       "Open your library",
-      "Choose an existing notes folder above to begin. Nothing here edits your files.",
+      "Choose an existing notes folder above to begin.",
     );
   }
   async start(): Promise<void> {
@@ -135,6 +173,7 @@ export class App {
   }
   stop(): void {
     this.stopped = true;
+    this.editor?.dispose();
     clearInterval(this.timer);
     this.epoch++;
     this.listRequest++;
@@ -149,13 +188,15 @@ export class App {
     this.metadata.replaceChildren();
   }
   async choose(path: string): Promise<void> {
-    if (this.selecting || !path.trim()) return;
+    if (this.selecting || this.busy || !path.trim()) return;
+    if (this.editor?.pending && !await this.protect()) return;
     this.selecting = true;
     this.select.disabled = true;
     const epoch = ++this.epoch;
     this.listRequest++;
     this.noteRequest++;
     this.browse = null;
+    this.editor?.dispose();this.editor=null;this.renderEditor();
     this.note = null;
     this.selected = null;
     this.list.replaceChildren();
@@ -180,12 +221,12 @@ export class App {
     }
   }
   async poll(): Promise<void> {
-    if (this.polling || this.selecting || this.stopped) return;
+    if (this.polling || this.selecting || this.busy || this.stopped) return;
     this.polling = true;
     const epoch = this.epoch;
     try {
       const state = await this.api.state();
-      if (epoch === this.epoch && !this.selecting && !this.stopped)
+      if (epoch === this.epoch && !this.selecting && !this.busy && !this.stopped)
         await this.apply(state);
     } catch (error) {
       if (epoch === this.epoch) {
@@ -213,13 +254,18 @@ export class App {
       this.report(
         "External monitoring is inactive. Changes may not appear until the library is reopened.",
       );
-    else this.error.hidden = true;
-    if (!changed) return;
+    // Monitoring refresh must not erase an unrelated operation failure.
+    if (!changed) {
+      if (this.pendingRefresh && this.selected && !this.editor?.pending)
+        await this.open(this.selected, true);
+      return;
+    }
     const epoch = ++this.epoch;
     this.listRequest++;
     this.noteRequest++;
     this.browse = null;
     if (switched) {
+      this.editor?.dispose();this.editor=null;this.renderEditor();
       this.selected = null;
       this.note = null;
       this.tag = null;
@@ -230,7 +276,7 @@ export class App {
       this.diagnostics.replaceChildren();
     }
     this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
-    this.metadata.replaceChildren();
+    if (!this.editor) this.metadata.replaceChildren();
     if (!state.root) {
       this.list.replaceChildren();
       this.empty(
@@ -239,18 +285,18 @@ export class App {
       );
       return;
     }
-    if (this.selected)
+    if (this.selected && !this.editor)
       this.empty(
         "Refreshing note…",
         "Checking the current file at its selected path.",
       );
-    else
+    else if (!this.selected)
       this.empty(
         "Your notes, at a glance",
         "Select a note to read. Browse by folder or tag, or search across your library.",
       );
     const refreshNote = this.selected
-      ? this.open(this.selected)
+      ? this.open(this.selected, true)
       : Promise.resolve();
     try {
       const browse = await this.api.browse(state.session);
@@ -406,7 +452,7 @@ export class App {
             "p",
             query || this.tag || this.folder
               ? "No matching notes. Try another search or clear your filters."
-              : "No notes yet. Add Markdown files in your text editor, or check diagnostics.",
+              : "No notes yet. Create a note above, or check diagnostics.",
             "empty-list",
           ),
         );
@@ -424,14 +470,25 @@ export class App {
       }
     }
   }
-  async open(path: string): Promise<void> {
+  async open(path: string, refresh = false): Promise<void> {
+    if (refresh) this.pendingRefresh = true;
+    if (!this.state?.root || this.busy || this.selecting) return;
+    if (refresh && this.editor?.pending) return;
+    if (!refresh && this.editor?.pending && !await this.protect()) return;
+    await this.readNote(path, refresh);
+  }
+  // Only the mutation owner calls this while busy; public navigation cannot bypass it.
+  private async readNote(path: string, refresh = false): Promise<void> {
     if (!this.state?.root) return;
+    const refreshRevision = this.editor?.revision;
     const request = ++this.noteRequest,
       epoch = this.epoch,
       session = this.state.session;
     this.selected = path;
-    this.note = null;
-    this.empty("Loading note…", "Reading the current Markdown from disk.");
+    if (!refresh) {
+      this.editor?.dispose();this.editor=null;this.note=null;this.renderEditor();
+      this.empty("Loading note…", "Reading the current Markdown from disk.");
+    }
     for (const button of this.list.querySelectorAll<HTMLButtonElement>(
       "[data-note-path]",
     ))
@@ -441,23 +498,115 @@ export class App {
       if (
         !this.valid(epoch, note.session) ||
         request !== this.noteRequest ||
-        note.path !== this.selected
+        note.path !== this.selected ||
+        (refresh && (!!this.editor?.pending || refreshRevision !== this.editor?.revision || this.busy))
       )
         return;
+      this.pendingRefresh = false;
+      if (refresh && this.editor?.revision === note.revision) return;
+      this.editor?.dispose();
       this.note = note;
+      this.editor = new Editor(note, this.api.save, ()=>this.renderEditor());
+      this.source.value=note.body;
+      this.renderEditor();
       this.metadata.replaceChildren(
         element("span", note.path),
         element("span", note.tags.map((t) => "#" + t).join(" ")),
-        element("small", "Read only"),
+        element("small", "Body editing preserves frontmatter. Tags are managed separately."),
       );
       this.preview.innerHTML = renderMarkdown(note.body);
       if (!note.body.trim())
         this.preview.append(element("p", "This note is empty."));
       this.preview.scrollTop = 0;
     } catch (error) {
-      if (this.valid(epoch, session) && request === this.noteRequest)
+      if (this.valid(epoch, session) && request === this.noteRequest && !this.editor?.pending && (!refresh || (!this.busy && refreshRevision === this.editor?.revision))) {
+        this.pendingRefresh = false;
+        this.editor?.dispose();this.editor=null;this.note=null;this.renderEditor();
         this.empty("Note unavailable", errorText(error));
+      }
     }
+  }
+  private setMode(mode: "source" | "preview"): void {
+    this.mode=mode;this.renderEditor();
+    if (mode === "source" && this.editor) this.source.focus();
+  }
+  private renderEditor(): void {
+    const editor=this.editor;
+    this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
+    this.preview.hidden=!!editor && this.mode!=="preview";
+    this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
+    this.retry.hidden=editor?.status!=="save_error";
+    this.source.readOnly=this.busy;
+    for (const b of this.tools.querySelectorAll<HTMLButtonElement>("button")) {
+      b.disabled=this.busy;
+      if (b.dataset.testid?.endsWith("-mode")) b.setAttribute("aria-pressed", String(b.dataset.testid===this.mode+"-mode"));
+    }
+    if (!editor) {this.saveError.textContent="";return;}
+    const labels={clean:"Saved",dirty:"Unsaved changes",saving:"Saving…",save_error:"Save failed · buffer retained",conflict:"Conflict · autosave paused",missing_on_disk:"Missing on disk · autosave paused"};
+    this.saveStatus.textContent=labels[editor.status];this.saveStatus.dataset.state=editor.status;
+    this.saveError.textContent=[editor.message,editor.warning].filter(Boolean).join("\n");
+    this.preview.innerHTML=renderMarkdown(editor.body);
+  }
+  get hasUnsavedChanges(): boolean {return !!this.editor?.pending || this.busy;}
+  private async protect(): Promise<boolean> {
+    this.busy=true;this.renderEditor();
+    try {
+      if (await this.editor?.flush() !== false) return true;
+      await this.dialog("Unsaved changes", "Your buffer is retained. Navigation was cancelled. Resolve the save error or copy your source before leaving.");
+      return false;
+    } finally {this.busy=false;this.renderEditor();}
+  }
+  async requestClose(): Promise<void> {
+    if (this.busy || this.selecting) return;
+    if (!await this.protect()) return;
+    this.busy=true;this.renderEditor();
+    try {await this.api.close();} catch(error) {this.report(error);this.busy=false;this.renderEditor();}
+  }
+  private dialog(title: string, detail: string, field?: {label: string; value: string}, destructive = false): Promise<string | null> {
+    return new Promise(resolve=>{
+      const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
+      const form=element("form");form.method="dialog";
+      const heading=element("h2",title);heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
+      form.append(heading,element("p",detail));
+      const input=element("input");
+      if (field) {const label=element("label",field.label);input.id="operation-value";input.dataset.testid="operation-value";input.value=field.value;input.required=true;label.htmlFor=input.id;form.append(label,input);}
+      const cancel=element("button",field || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
+      const finish=(value:string|null)=>{dialog.close();dialog.remove();resolve(value);};
+      cancel.addEventListener("click",()=>finish(null));form.append(cancel);
+      if (field || destructive) {const submit=element("button",destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
+      form.addEventListener("submit",event=>{event.preventDefault();finish(field?input.value:"");});
+      dialog.addEventListener("cancel",event=>{event.preventDefault();finish(null);});
+      dialog.append(form);this.host.append(dialog);dialog.showModal();
+      if (field) {input.focus();input.select();} else cancel.focus();
+    });
+  }
+  private async mutate(action: "create" | "move" | "tag" | "untag" | "delete"): Promise<void> {
+    if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor)) return;
+    this.busy=true;this.renderEditor();this.error.hidden=true;
+    try {
+      if (await this.editor?.flush() === false) {
+        await this.dialog("Unsaved changes", "Operation cancelled. Your source is retained; resolve the save error first.");return;
+      }
+      const editor=this.editor, session=this.state.session;
+      const value=action==="delete"
+        ? await this.dialog("Permanently delete note?",`Delete ${editor!.path} from disk? There is no undo.`,undefined,true)
+        : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":action==="tag"?"Add tag":"Remove tag",
+          action==="create" || action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten." : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
+          {label:action==="create" || action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""});
+      if (value===null) return;
+      const result=action==="create" ? await this.api.create(session,value,value.split("/").at(-1)!.replace(/\.md$/, ""),"",[])
+        : action==="move" ? await this.api.move(session,editor!.path,editor!.revision,value)
+        : action==="delete" ? await this.api.delete(session,editor!.path,editor!.revision)
+        : await this.api.tag(session,editor!.path,editor!.revision,value,action==="tag");
+      if (result.session!==session || !result.file_committed) throw new Error("Invalid mutation acknowledgement");
+      this.editor?.dispose();this.editor=null;this.note=null;this.selected=null;this.noteRequest++;
+      this.renderEditor();
+      if (action==="delete") this.empty("Note deleted", "The selected file was permanently removed.");
+      else {await this.readNote(result.path);if (action==="create") this.setMode("source");}
+      if (result.warnings.length) this.report("File committed. "+result.warnings.join("\n"));
+      if (this.state) this.state={...this.state,generation:-1};
+    } catch(error) {this.report(error);} finally {this.busy=false;this.renderEditor();}
+    void this.poll();
   }
   private async follow(event: MouseEvent): Promise<void> {
     const anchor = (event.target as Element).closest<HTMLAnchorElement>("a");
