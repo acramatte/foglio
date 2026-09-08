@@ -1,9 +1,11 @@
 //! Linux local-filesystem Markdown domain with a disposable search index.
+pub mod events;
 pub mod filesystem;
 pub mod frontmatter;
 pub mod index;
 pub mod library;
 pub mod search;
+pub mod watcher;
 pub use filesystem::LibraryRelativePath;
 pub use frontmatter::{Document, NoteId};
 pub use library::{Library, Report};

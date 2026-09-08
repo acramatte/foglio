@@ -2,7 +2,7 @@
 
 A local-first Markdown notes application with a headless Rust core and a working filesystem CLI. The Tauri desktop client is planned, not implemented.
 
-**Status: Phases 1–2 implemented and verified locally on Linux x86_64.** See [filesystem safety](docs/phase1.md) and [index/search commands, recovery and benchmark evidence](docs/phase2.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+**Status: Phases 1–3 implemented and verified locally on Linux x86_64.** See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
 Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
@@ -30,7 +30,7 @@ Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearin
 
 ## Scope and conventions
 
-This delivery completes **Phase 2 index/search** locally on top of the filesystem/CLI milestone. Phase 3 onward remains open. There is no watcher, Tauri, sync, encryption, or plugin scaffold.
+This delivery completes **Phase 3 live reconciliation** locally on top of the filesystem/CLI and index milestones. The core owns recursive watching, bounded domain subscriptions and recovery; Phase 4 onward remains open. There is no daemon, Tauri, sync integration, encryption, or plugin scaffold.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.

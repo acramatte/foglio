@@ -1,6 +1,6 @@
 # Decision register
 
-Status meanings: **Established** comes from the supplied brief; **Proposed** is a concrete planning default that needs acceptance before implementation; **Spike** needs technical evidence. Phase 0 bootstrap execution is recorded in [tasks](tasks.md); the later-phase spikes remain unrun.
+Status meanings: **Established** comes from the supplied brief; **Proposed** is a concrete planning default that needs acceptance before implementation; **Spike** needs technical evidence. Phase 0 bootstrap execution is recorded in [tasks](tasks.md); S01/S02, the S04 Linux watcher slice, and the S05 baseline now have evidence. Later editor/release gates remain open.
 
 ## Established decisions
 
@@ -51,6 +51,14 @@ The user explicitly authorized Phase 2 and approved D16 before implementation. E
 | D16 | Literal tokens by default, explicit phrase/prefix modes, exact case-sensitive tags and component-aware folders | Core/CLI hostile and Unicode query fixtures; SQLite unicode61 tokenization |
 | D25 | Phase 2 only; bundled SQLite/FTS5, transactional cache, root-lock-scoped connections with DELETE journaling | Cache deletion/corruption and concurrent process tests; [Phase 2](phase2.md) |
 | S05 baseline | Record real 1k/50k measurements; 100 ms search p95 remains provisional, not a release guarantee | [Raw baseline and environment](phase2-baseline.json); tmpfs and warm OS-cache limits explicit |
+
+## Phase 3 implementation choices
+
+The user explicitly authorized Phase 3. S04 is verified on Linux/tmpfs with independent writers, native atomic-save bursts, startup overlap, subtree changes, permission recovery, duplicate conflict copies, pause/restart and injected dropped hints. See [evidence and limitations](phase3.md). Actual OS suspend and cross-device/provider transfer remain release gates.
+
+- Use pinned `notify` 8.2.0 with nonblocking bounded hints and bounded subscriber queues; access events are ignored to avoid scanner feedback.
+- Reconcile full content per dirty batch and periodically, preserving complete identity/unknown-coverage invariants. Default 75 ms debounce, 500 ms maximum batching delay and 30-second safety interval are tunable policies, not benchmark guarantees. Large-library watcher measurements remain P7.
+- Publish committed, body-free revisions; consume initial/overflow invalidation before refetching. Track native backend lifetimes on the shared library handle; do not imply daemon or cross-process status.
 
 ## Proposed implementation defaults for later phases
 

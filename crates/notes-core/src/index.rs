@@ -360,6 +360,10 @@ impl Library {
             force: force || cache_rebuilt,
             status: IndexStatus {
                 cache_rebuilt,
+                watcher_active: self
+                    .watcher_backends
+                    .load(std::sync::atomic::Ordering::Acquire)
+                    > 0,
                 ..IndexStatus::default()
             },
         };
@@ -468,6 +472,34 @@ impl Library {
                 .then(a.code.as_str().cmp(b.code.as_str()))
         });
         Ok((conn, scan.status))
+    }
+    /// Capture body-free identities from the exact committed index generation.
+    /// The connection is closed before releasing the cooperative lock.
+    pub(crate) fn watch_reconcile(&self) -> Result<(IndexStatus, Vec<crate::events::WatchedNote>)> {
+        let _lock = self.lock()?;
+        let (conn, status) = self.reconcile_locked(true, false)?;
+        let mut stmt = conn
+            .prepare("SELECT id,path,content_hash FROM notes ORDER BY path")
+            .map_err(db_error)?;
+        let rows = stmt
+            .query_map([], |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, String>(1)?,
+                    r.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(db_error)?;
+        let mut notes = Vec::new();
+        for row in rows {
+            let (id, path, hash) = row.map_err(db_error)?;
+            notes.push(crate::events::WatchedNote {
+                id: crate::NoteId::parse(&id)?,
+                path,
+                revision: crate::Revision(hash),
+            });
+        }
+        Ok((status, notes))
     }
     pub(crate) fn index_after_commit(
         &self,

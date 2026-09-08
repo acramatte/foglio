@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07 and P2-01–P2-04 verified locally; hosted CI for Phases 1–2 pending. Phase 3 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, and P3-01–P3-03 verified locally; hosted CI for Phases 1–3 pending. Phase 4 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -84,9 +84,18 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P3-01 | P2-04 | Implement recursive watcher, dirty-path batching, startup ordering, subtree invalidation, shutdown in `watcher.rs`; S04 | Separate process create/edit/rename/delete and directory operations converge; no exact low-level event-order assumptions (V16) |
-| [ ] | P3-02 | P3-01 | Implement domain subscriptions, committed revisions, bounded queues, overflow invalidation, periodic/manual recovery | Self-writes converge without loops; dropped events trigger recovery; clients can refetch and recover; diagnostics/index-degraded state observable (V17) |
-| [ ] | P3-03 | P3-02 | Add real watcher stress and cross-platform cases, plus external-editor/sync documentation notes | Atomic-save bursts, temporary disappearances, same-metadata touched files, duplicate conflict copies, pause/resume and directory changes pass on declared targets (V16, V17, V24) |
+| [x] | P3-01 | P2-04 | Implement recursive watcher, dirty-path batching, startup ordering, subtree invalidation, shutdown in `watcher.rs`; S04 | Separate process create/edit/rename/delete and directory operations converge; no exact low-level event-order assumptions (V16) |
+| [x] | P3-02 | P3-01 | Implement domain subscriptions, committed revisions, bounded queues, overflow invalidation, periodic/manual recovery | Self-writes converge without loops; dropped events trigger recovery; clients can refetch and recover; diagnostics/index-degraded state observable (V17) |
+| [x] | P3-03 | P3-02 | Add real watcher stress and cross-platform cases, plus external-editor/sync documentation notes | Atomic-save bursts, temporary disappearances, same-metadata touched files, duplicate conflict copies, pause/resume and directory changes pass on declared targets (V16, V17, V24) |
+
+## Phase 3 execution evidence
+
+- **Tasks/status:** P3-01–P3-03 verified locally. User explicitly authorized Phase 3; no Phase 4 scaffold or daemon command added.
+- **Implementation/PR:** uncommitted working tree; no commit, push or PR. Core watcher/events, backend lifetime status, native and deterministic recovery tests, and [Phase 3 API/evidence](phase3.md).
+- **Tests:** `cargo fmt --all -- --check`; `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`; `cargo test --locked --workspace --all-features`; `cargo build --locked --workspace`; `python3 tests/acceptance/phase1.py`; `python3 tests/acceptance/phase2.py`; `git diff --check` all passed on Linux x86_64/Rust 1.93.1. Existing Python suites: 12 and 4 passing scenarios. Native suites repeated with `cargo test --locked -p notes-core --test watcher --test watcher_recovery --test watcher_startup --test watcher_status`: all 10 repetitions passed (suite elapsed 2.733–2.772 seconds; not a convergence benchmark).
+- **Acceptance:** V16/V17, shared-handle V14 watcher status, and V24 development simulation pass against actual temporary files and separate Python writers. Explicit dropped-hint injection proves periodic content recovery; positive change/move/delete assertions verify event payloads against disk revisions.
+- **Review/red-green:** independent review identified subscription initialization ambiguity and inactive shared-handle status. The new status regression failed before the backend counter fix, then passed. Initial invalidation ordering, startup overlap and dropped-hint recovery have additional coverage.
+- **Decisions/limitations:** S04 Linux/tmpfs slice resolved; full-library hashing per bounded batch prioritizes identity correctness over large-library throughput. Configurable scheduling defaults are not performance guarantees. No real OS suspend, other OS backend, remote filesystem or second-device sync evidence. Hosted CI and later release gates remain pending.
 
 ## Phase 4 — Read-only desktop
 

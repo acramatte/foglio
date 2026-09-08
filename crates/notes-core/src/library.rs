@@ -52,6 +52,7 @@ pub struct Library {
     root: PathBuf,
     state: PathBuf,
     pub(crate) cache: PathBuf,
+    pub(crate) watcher_backends: std::sync::atomic::AtomicUsize,
 }
 fn absolute(p: &Path) -> Result<PathBuf> {
     Ok(if p.is_absolute() {
@@ -130,7 +131,12 @@ impl Library {
             return Err(Error::new(ErrorCode::Path, "library is not directory"));
         }
         let cache = state.join("cache");
-        Ok(Self { root, state, cache })
+        Ok(Self {
+            root,
+            state,
+            cache,
+            watcher_backends: std::sync::atomic::AtomicUsize::new(0),
+        })
     }
     pub fn resolve(override_root: Option<&Path>) -> Result<Self> {
         let state = config_dir()?;
