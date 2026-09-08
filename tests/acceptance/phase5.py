@@ -88,9 +88,10 @@ def main():
             wait(lambda:js('return !!document.querySelector(arguments[0])',f'[data-note-path="{path}"]'),'note listed '+path)
             click(f'[data-note-path="{path}"]')
             wait(lambda:js('return document.querySelector(".metadata").textContent.includes(arguments[0])',path),'note opened '+path)
-        def operation(action,value=None,cancel=False):
+        def operation(action,value=None,folder=None,cancel=False):
             click(f'[data-testid={action}]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'operation dialog')
             if value is not None: driver.fill('[data-testid=operation-value]',value)
+            if folder is not None: driver.fill('[data-testid=operation-folder]',folder)
             click('[data-testid=dialog-cancel]' if cancel else '[data-testid=dialog-submit]')
             wait(lambda:js("return !document.querySelector('dialog')"),'dialog closed')
         with (sandbox/'driver.log').open('w+') as log:
@@ -122,10 +123,10 @@ def main():
                 assert js("return !document.querySelector('textarea').hidden && document.querySelector('article').hidden")
                 js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,bubbles:true}))")
                 assert js("return document.querySelector('textarea').hidden && !document.querySelector('article').hidden")
-                operation('new-note','System designs');wait(lambda:(library/'System-designs.md').exists(),'created file')
-                wait(lambda:js("return document.querySelector('.metadata').textContent.includes('System-designs.md')"),'created path selected')
+                operation('new-note','Sprite','blog');wait(lambda:(library/'blog/Sprite.md').exists(),'created nested file')
+                wait(lambda:js("return document.querySelector('.metadata').textContent.includes('blog/Sprite.md')"),'created path selected')
                 edit('# Created\nBody from desktop\n');wait(saved,'new note autosave')
-                created=library/'System-designs.md';assert created.read_text()=='# Created\nBody from desktop\n'
+                created=library/'blog/Sprite.md';assert created.read_text()=='# Created\nBody from desktop\n'
                 operation('tag-note','Project');wait(lambda:'tags: ["Project"]' in created.read_text(),'tag on disk')
                 wait(lambda:js("return document.querySelector('.metadata').textContent.includes('#Project')"),'tag selected')
                 operation('untag-note');wait(lambda:'Project' not in created.read_text(),'tag removed')
@@ -150,6 +151,7 @@ def main():
                 open_note('preserve.md');note.chmod(0o400);edit(source()+'permission tail\n')
                 wait(lambda:js("return document.querySelector('[data-testid=save-status]').dataset.state==='save_error'"),'permission failure')
                 assert 'permission tail' in source() and b'permission tail' not in note.read_bytes()
+                wait(lambda:js("return !!document.querySelector('[data-note-path=\"other.md\"]')"),'other note relisted before failed navigation')
                 click('[data-note-path="other.md"]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'failed navigation blocked');click('[data-testid=dialog-cancel]')
                 pid=app_pid(env['HOME']);native_close(pid);wait(lambda:js("return !!document.querySelector('dialog[open]')"),'native close blocked on failure');click('[data-testid=dialog-cancel]')
                 assert 'permission tail' in source();note.chmod(0o600)

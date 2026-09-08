@@ -22,15 +22,27 @@ describe("desktop UI state", () => {
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
   expect(source.hidden).toBe(false);
  });
- it("derives a portable filename from a new note title",async()=>{
+ it("derives a portable filename when the optional folder is blank",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});
   await app.start();host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();
   await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
   const input=host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!;
-  expect(input.labels?.[0]?.textContent).toBe("Note title");input.value="System designs";
+  const folder=host.querySelector<HTMLInputElement>("[data-testid=operation-folder]")!;
+  expect(input.labels?.[0]?.textContent).toBe("Note title");expect(folder.labels?.[0]?.textContent).toBe("Folder (optional)");expect(folder.required).toBe(false);input.value="System designs";
   host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
-  await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"System designs","",[]));
+  await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"System designs",null,"",[]));
+ });
+ it("derives the filename inside an optional nested folder",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"blog/engineering/Sprite.md",revision:"r1",file_committed:true,warnings:[]})});
+  await app.start();host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!.value="Sprite";
+  host.querySelector<HTMLInputElement>("[data-testid=operation-folder]")!.value="blog/engineering";
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"Sprite","blog/engineering","",[]));
+  expect(api.open).toHaveBeenCalledWith(1,"blog/engineering/Sprite.md");
  });
  it("offers existing tags for removal and disables removal when none exist",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};

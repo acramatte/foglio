@@ -7,7 +7,7 @@ P5-01–P5-04 implemented and verified locally on Linux, including review regres
 - Source-body editor and sanitized preview; Ctrl+E toggles in either direction, Ctrl+S flushes. Frontmatter is kept outside the editor and tags use core metadata patches. Preview overflow is contained in the note pane rather than scrolling the application window.
 - Autosave debounces for 400 ms. A dispatch snapshots library session, path, revision, body and buffer generation. Saves serialize; edits during an in-flight save use its acknowledged revision for the next save, never falsely marking a newer buffer saved.
 - Failed saves retain the buffer and pause automatic retries. Permission/I/O errors offer explicit retry. Stale and missing paths pause without overwrite or resurrection. Phase 6's reload/discard and save-copy choices are not implemented; copy retained source manually if needed.
-- Create, move/rename, add/remove tags and explicitly confirmed permanent deletion invoke guarded core operations. New-note titles use the shared filename policy (ASCII spaces become hyphens and `.md` is appended), while move destinations remain explicit and never clobber. Tag removal offers the selected note's existing tags and is unavailable when there are none.
+- Create, move/rename, add/remove tags and explicitly confirmed permanent deletion invoke guarded core operations. New-note titles use the shared filename policy (ASCII spaces become hyphens and `.md` is appended); an optional library-relative folder such as `blog` or `blog/engineering` places the derived filename in that hierarchy. Creation remains no-clobber. Tag removal offers the selected note's existing tags and is unavailable when there are none.
 - Note/library/link navigation and native close flush or remain on the current buffer. The editor is read-only during a guarded transition. Native WM_DELETE_WINDOW is intercepted; only a successful frontend flush authorizes backend watcher shutdown and exit. Process termination/crashes are not protected and there is no durable draft/history store.
 - Monitoring is separate from save state. Committed file outcomes with index/durability warnings remain successful saves, never automatic retries.
 
@@ -32,7 +32,7 @@ Passed:
 - `cargo fmt --all -- --check`
 - `cargo test --locked --workspace --all-features`
 - `cargo clippy --locked --workspace --all-targets --all-features -- -D warnings`
-- `npm test` in `apps/desktop`: 36 passing tests
+- `npm test` in `apps/desktop`: 37 passing tests
 - `npm run typecheck` and `npm run build`
 - `npm run tauri -- build --debug --no-bundle` and optimized `--no-bundle`
 - `python3 tests/acceptance/phase1.py`: 12 passing scenarios

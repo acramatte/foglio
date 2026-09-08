@@ -18,6 +18,14 @@ function element<K extends keyof HTMLElementTagNameMap>(
   if (className) el.className = className;
   return el;
 }
+type DialogField = {
+  label: string;
+  value: string;
+  options?: string[];
+  placeholder?: string;
+  required?: boolean;
+  testid?: string;
+};
 export class App {
   private editor: Editor | null = null;
   private busy = false;
@@ -570,28 +578,30 @@ export class App {
     this.busy=true;this.renderEditor();
     try {await this.api.close();} catch(error) {this.report(error);this.busy=false;this.renderEditor();}
   }
-  private dialog(title: string, detail: string, field?: {label: string; value: string; options?: string[]}, destructive = false): Promise<string | null> {
+  private dialog(title: string, detail: string, fields?: DialogField[], destructive = false): Promise<string[] | null> {
     return new Promise(resolve=>{
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
       const form=element("form");form.method="dialog";
       const heading=element("h2",title);heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
       form.append(heading,element("p",detail));
-      const control=field?.options ? element("select") : element("input");
-      if (field) {
-        const label=element("label",field.label);control.id="operation-value";control.dataset.testid="operation-value";control.required=true;label.htmlFor=control.id;
+      const controls=(fields ?? []).map((field,index)=>{
+        const control=field.options ? element("select") : element("input");
+        const label=element("label",field.label);control.id=`operation-value-${index}`;control.dataset.testid=field.testid ?? "operation-value";
+        control.required=field.required ?? true;control.value=field.value;label.htmlFor=control.id;
+        if (field.placeholder && control instanceof HTMLInputElement) control.placeholder=field.placeholder;
         if (control instanceof HTMLSelectElement) for (const value of field.options!) {
           const option=element("option");option.value=value;option.textContent=value;control.append(option);
         }
-        control.value=field.value;form.append(label,control);
-      }
-      const cancel=element("button",field || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
-      const finish=(value:string|null)=>{dialog.close();dialog.remove();resolve(value);};
+        form.append(label,control);return control;
+      });
+      const cancel=element("button",controls.length || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
+      const finish=(value:string[]|null)=>{dialog.close();dialog.remove();resolve(value);};
       cancel.addEventListener("click",()=>finish(null));form.append(cancel);
-      if (field || destructive) {const submit=element("button",destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
-      form.addEventListener("submit",event=>{event.preventDefault();finish(field?control.value:"");});
+      if (controls.length || destructive) {const submit=element("button",destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
+      form.addEventListener("submit",event=>{event.preventDefault();finish(controls.map(control=>control.value));});
       dialog.addEventListener("cancel",event=>{event.preventDefault();finish(null);});
       dialog.append(form);this.host.append(dialog);dialog.showModal();
-      if (field) {control.focus();if (control instanceof HTMLInputElement) control.select();} else cancel.focus();
+      const first=controls[0];if (first) {first.focus();if (first instanceof HTMLInputElement) first.select();} else cancel.focus();
     });
   }
   private async mutate(action: "create" | "move" | "tag" | "untag" | "delete"): Promise<void> {
@@ -602,18 +612,21 @@ export class App {
         await this.dialog("Unsaved changes", "Operation cancelled. Your source is retained; resolve the save error first.");return;
       }
       const editor=this.editor, session=this.state.session;
-      const value=action==="delete"
+      const values=action==="delete"
         ? await this.dialog("Permanently delete note?",`Delete ${editor!.path} from disk? There is no undo.`,undefined,true)
         : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":action==="tag"?"Add tag":"Remove tag",
-          action==="create" ? "Spaces in the title become hyphens in the Markdown filename. Existing files will never be overwritten."
+          action==="create" ? "The title determines the Markdown filename. Choose a folder inside your library, or leave it blank for the library root. Existing files will never be overwritten."
             : action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten."
             : action==="untag" ? "Choose a tag currently attached to this note. Other frontmatter and the body stay unchanged."
             : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
-          action==="untag"
-            ? {label:"Tag",value:this.note!.tags[0]!,options:this.note!.tags}
-            : {label:action==="create" ? "Note title" : action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""});
-      if (value===null) return;
-      const result=action==="create" ? await this.api.create(session,value,"",[])
+          action==="create"
+            ? [{label:"Note title",value:""},{label:"Folder (optional)",value:"",required:false,testid:"operation-folder",placeholder:"For example blog or blog/engineering"}]
+            : action==="untag"
+              ? [{label:"Tag",value:this.note!.tags[0]!,options:this.note!.tags}]
+              : [{label:action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""}]);
+      if (values===null) return;
+      const value=values[0] ?? "";
+      const result=action==="create" ? await this.api.create(session,value,values[1] || null,"",[])
         : action==="move" ? await this.api.move(session,editor!.path,editor!.revision,value)
         : action==="delete" ? await this.api.delete(session,editor!.path,editor!.revision)
         : await this.api.tag(session,editor!.path,editor!.revision,value,action==="tag");

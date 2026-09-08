@@ -344,10 +344,27 @@ impl Backend {
         &self,
         session: u64,
         title: &str,
+        folder: Option<&str>,
         body: &str,
         tags: &[String],
     ) -> Result<Mutation> {
-        let path = notes_core::default_note_path(title).map_err(core_error)?;
+        let filename = notes_core::default_note_path(title).map_err(core_error)?;
+        let path = match folder {
+            Some(folder) => {
+                if folder
+                    .rsplit('/')
+                    .next()
+                    .is_some_and(|component| component.to_ascii_lowercase().ends_with(".md"))
+                {
+                    return Err(mutation_error(
+                        "usage",
+                        "folder must not include a Markdown filename",
+                    ));
+                }
+                format!("{folder}/{filename}")
+            }
+            None => filename,
+        };
         self.create(session, &path, title, body, tags)
     }
     pub fn create(

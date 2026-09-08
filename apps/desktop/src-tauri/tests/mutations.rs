@@ -228,13 +228,31 @@ fn creation_title_defaults_and_validation_preserve_supplied_source() {
         "literal source"
     );
     let spaced = backend
-        .create_from_title(s, "System designs", "", &[])
+        .create_from_title(s, "System designs", None, "", &[])
         .unwrap();
     assert_eq!(spaced.path, "System-designs.md");
     assert_eq!(
         fs::read_to_string(root.join("System-designs.md")).unwrap(),
         "# System designs\n"
     );
+    let nested = backend
+        .create_from_title(s, "Sprite", Some("blog/design"), "", &[])
+        .unwrap();
+    assert_eq!(nested.path, "blog/design/Sprite.md");
+    assert_eq!(
+        fs::read_to_string(root.join("blog/design/Sprite.md")).unwrap(),
+        "# Sprite\n"
+    );
+    code(
+        backend.create_from_title(s, "No filename folder", Some("blog/note.md"), "", &[]),
+        "usage",
+    );
+    assert!(!root.join("blog/note.md/No-filename-folder.md").exists());
+    code(
+        backend.create_from_title(s, "No traversal", Some("../outside"), "", &[]),
+        "path",
+    );
+    assert!(!temp.path().join("outside/No-traversal.md").exists());
     for title in ["", "  ", "line\nbreak", "tab\there"] {
         code(backend.create(s, "bad.md", title, "body", &[]), "usage");
     }
