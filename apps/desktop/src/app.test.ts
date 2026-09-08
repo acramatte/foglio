@@ -22,6 +22,16 @@ describe("desktop UI state", () => {
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
   expect(source.hidden).toBe(false);
  });
+ it("opens the new-note dialog with Ctrl+N",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});
+  await app.start();document.dispatchEvent(new KeyboardEvent("keydown",{key:"n",ctrlKey:true}));
+  await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  const input=host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!;
+  input.value="System designs";
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"System designs",null,"",[]));
+ });
  it("derives a portable filename when the optional folder is blank",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});

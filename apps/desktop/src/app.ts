@@ -70,6 +70,10 @@ export class App {
       event.preventDefault();
       this.setMode(this.mode === "source" ? "preview" : "source");
     }
+    if (event.key.toLowerCase() === "n") {
+      event.preventDefault();
+      void this.mutate("create");
+    }
   };
   constructor(
     private readonly host: HTMLElement,
@@ -163,7 +167,7 @@ export class App {
     this.status.title =
       "Monitors changes made by external editors and sync tools. Save status is shown separately.";
     footer.append(
-      element("span", "Markdown source · Ctrl+E source/preview · Ctrl+S save"),
+      element("span", "Markdown source · Ctrl+N new note · Ctrl+E source/preview · Ctrl+S save"),
       this.status,
     );
     host.append(
