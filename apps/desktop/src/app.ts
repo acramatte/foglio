@@ -129,7 +129,9 @@ export class App {
     const create = element("button", "New note", "new-note");
     create.dataset.testid="new-note";
     create.addEventListener("click",()=>{void this.mutate("create");});
-    middle.append(create, this.search, this.count, this.list);
+    const listScroll = element("div", "", "note-list-scroll");
+    listScroll.append(this.list);
+    middle.append(create, this.search, this.count, listScroll);
     const reader = element("section", undefined, "reader");
     reader.setAttribute("aria-label", "Note reader");
     this.preview.dataset.testid = "preview";

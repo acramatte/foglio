@@ -71,6 +71,8 @@ def main():
         (library/'missing.md').write_text('# Missing\n')
         (library/'mixed.md').write_bytes(b'A\r\nB\nC\r\nD')
         (library/'long.md').write_text('# Long note\n\n' + 'A paragraph that makes the preview scroll.\n\n' * 80)
+        for i in range(40):
+            (library/f'scroll-{i:02}.md').write_text(f'# Scroll note {i:02}\n')
         env = {key:os.environ[key] for key in ('PATH','LANG','LD_LIBRARY_PATH') if key in os.environ}
         for key, folder in [('HOME','home'),('XDG_CONFIG_HOME','config'),('XDG_CACHE_HOME','cache'),('XDG_DATA_HOME','data'),('XDG_RUNTIME_DIR','runtime')]:
             p=sandbox/folder;p.mkdir(mode=0o700);env[key]=str(p)
@@ -101,13 +103,28 @@ def main():
                 wait(lambda:js("return !!document.querySelector('[data-testid=root-path]')"),'onboarding')
                 driver.fill('[data-testid=root-path]',str(library));click('[data-testid=select-library]');open_note('preserve.md')
                 assert note.read_bytes()==original
+                window = driver.request('GET', f'/session/{driver.session}/window/rect')
+                for height in (400, 600):
+                    driver.request('POST', f'/session/{driver.session}/window/rect', {'width':1000, 'height':height})
+                    wait(lambda:js("const l=document.querySelector('.note-list-scroll');return l.clientHeight>0 && l.scrollHeight>l.clientHeight && l.getBoundingClientRect().bottom<=innerHeight"),'note list constrained to small window')
+                    controls = js("return ['.new-note', '.notes input', '.count'].map(s=>document.querySelector(s).getBoundingClientRect().top)")
+                    last_path = js("const l=document.querySelector('.note-list-scroll');l.scrollTop=l.scrollHeight;return l.querySelector('.note-list > :last-child').dataset.notePath")
+                    wait(lambda:js("const l=document.querySelector('.note-list-scroll'), r=l.querySelector('.note-list > :last-child').getBoundingClientRect(), b=l.getBoundingClientRect();return l.scrollTop>0 && r.bottom>b.top && r.bottom<=b.bottom+1"),'last note visible after scrolling')
+                    assert controls == js("return ['.new-note', '.notes input', '.count'].map(s=>document.querySelector(s).getBoundingClientRect().top)")
+                    assert js("return document.documentElement.scrollHeight===document.documentElement.clientHeight")
+                    element = driver.request('POST', f'/session/{driver.session}/element', {'using':'css selector', 'value':'.note-list > :last-child'})
+                    driver.request('POST', f'/session/{driver.session}/element/{element["element-6066-11e4-a52e-4f735466cecf"]}/click', {})
+                    wait(lambda:js("return document.querySelector('.metadata').textContent.includes(arguments[0])",last_path),'last note opened without searching')
+                driver.request('POST', f'/session/{driver.session}/window/rect', window)
+                scenarios.append('small-window note list scrolls to clickable last note with fixed search and create controls')
+                open_note('preserve.md')
                 # No-op source/preview toggles must not serialize the DOM or textarea normalization.
                 click('[data-testid=source-mode]');edit(source());click('[data-testid=preview-mode]')
                 assert saved() and note.read_bytes()==original
                 assert js("return !!document.querySelector('article table') && !document.querySelector('article img')")
                 open_note('long.md')
-                assert js("const p=document.querySelector('[data-testid=preview]');return p.scrollHeight>p.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
-                assert js("const p=document.querySelector('[data-testid=preview]');p.scrollTop=200;return p.scrollTop>0")
+                assert js("const p=document.querySelector('.preview-scroll');return p.scrollHeight>p.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
+                assert js("const p=document.querySelector('.preview-scroll');p.scrollTop=200;return p.scrollTop>0")
                 scenarios.append('long preview scroll stays inside the note pane')
                 open_note('preserve.md')
                 click('[data-testid=source-mode]')
@@ -182,6 +199,7 @@ def main():
             except Exception:
                 log.flush();log.seek(0);print(log.read())
                 if driver.session:
+                    print(js("const l=document.querySelector('.note-list-scroll');return {height:innerHeight,list:l.getBoundingClientRect().toJSON(),last:l.querySelector('.note-list > :last-child').getBoundingClientRect().toJSON(),scrollTop:l.scrollTop,scrollHeight:l.scrollHeight}"))
                     print(js('return document.body.innerText'))
                     print(driver.invoke('desktop_state'))
                     print(js('return document.querySelector("[data-testid=diagnostics]")?.textContent'))

@@ -22,6 +22,17 @@ describe("desktop UI state", () => {
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
   expect(source.hidden).toBe(false);
  });
+ it("keeps note content inside a separate scroll wrapper when reloading the list",async()=>{
+  const {host}=setup();await app.start();
+  const list=host.querySelector<HTMLElement>("[data-testid=note-list]")!;
+  const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
+  expect(scroll).not.toBeNull();expect(list.parentElement).toBe(scroll);
+  expect(scroll.contains(host.querySelector("[data-testid=search-input]"))).toBe(false);
+  expect(scroll.contains(host.querySelector("[data-testid=new-note]"))).toBe(false);
+  await app.loadList();
+  expect(list.parentElement).toBe(scroll);
+  expect(list.querySelectorAll(".note-card")).toHaveLength(2);
+ });
  it("owns preview scrolling in a wrapper that follows mode and note changes",async()=>{
   const {host}=setup();await app.start();
   const preview=host.querySelector<HTMLElement>("[data-testid=preview]")!;
