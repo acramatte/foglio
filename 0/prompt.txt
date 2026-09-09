@@ -1,0 +1,1 @@
+I have rust/cargo installed at /home/alexis/.cargo/bin at version 1.93.1, but i've now also installed Rust through Mise (Mise en place) at a more recent version (1.98 i think).
