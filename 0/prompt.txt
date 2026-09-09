@@ -1,0 +1,1 @@
+however my intellij idea doesn't see anything under the /mise/shims folder. Is that the sandbox of flatpack/flathub from which Intellij is installed ?
