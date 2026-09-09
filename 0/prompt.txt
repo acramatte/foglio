@@ -1,0 +1,1 @@
+/home/alexis/.cargo/bin points to a toolchain version of 1.93.1 in Intellij
