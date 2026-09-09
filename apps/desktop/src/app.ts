@@ -57,6 +57,7 @@ export class App {
   private readonly navigation = element("nav");
   private readonly list = element("div", "", "note-list");
   private readonly preview = element("article", "", "preview");
+  private readonly previewScroll = element("div", "", "preview-scroll");
   private readonly metadata = element("div", "", "metadata");
   private readonly diagnostics = element("details", undefined, "diagnostics");
   private readonly count = element("span", "", "count");
@@ -158,7 +159,8 @@ export class App {
     this.saveError.dataset.testid="save-error";
     this.saveError.setAttribute("role","alert");
     this.retry.addEventListener("click",()=>{void this.editor?.retry();});
-    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.source, this.preview);
+    this.previewScroll.append(this.preview);
+    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.source, this.previewScroll);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -537,7 +539,7 @@ export class App {
       this.preview.innerHTML = renderMarkdown(note.body);
       if (!note.body.trim())
         this.preview.append(element("p", "This note is empty."));
-      this.preview.scrollTop = 0;
+      this.previewScroll.scrollTop = 0;
     } catch (error) {
       if (this.valid(epoch, session) && request === this.noteRequest && !this.editor?.pending && (!refresh || (!this.busy && refreshRevision === this.editor?.revision))) {
         this.pendingRefresh = false;
@@ -554,6 +556,7 @@ export class App {
     const editor=this.editor;
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
     this.preview.hidden=!!editor && this.mode!=="preview";
+    this.previewScroll.hidden=this.preview.hidden;
     this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
     this.retry.hidden=editor?.status!=="save_error";
     this.source.readOnly=this.busy;

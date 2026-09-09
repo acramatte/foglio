@@ -258,14 +258,17 @@ nav h3 {
   font-family: ui-monospace, monospace;
   font-size: 10px;
 }
-.preview {
-  padding: 28px clamp(24px, 5vw, 70px) 60px;
+.preview-scroll {
   min-height: 0;
   overflow: auto;
+  flex: 1;
+}
+.preview {
+  background: #fffefb;
+  padding: 28px clamp(24px, 5vw, 70px) 60px;
   line-height: 1.85;
   overflow-wrap: anywhere;
   color: #364035;
-  flex: 1;
 }
 .preview h1,
 .preview h2,

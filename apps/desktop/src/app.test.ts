@@ -22,6 +22,19 @@ describe("desktop UI state", () => {
   document.dispatchEvent(new KeyboardEvent("keydown",{key:"e",ctrlKey:true,bubbles:true}));
   expect(source.hidden).toBe(false);
  });
+ it("owns preview scrolling in a wrapper that follows mode and note changes",async()=>{
+  const {host}=setup();await app.start();
+  const preview=host.querySelector<HTMLElement>("[data-testid=preview]")!;
+  const scroll=host.querySelector<HTMLElement>(".preview-scroll")!;
+  expect(scroll).not.toBeNull();expect(preview.parentElement).toBe(scroll);
+  expect(scroll.hidden).toBe(false);
+  await app.open("a.md");scroll.scrollTop=120;
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  expect(scroll.hidden).toBe(true);
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  expect(scroll.hidden).toBe(false);expect(scroll.scrollTop).toBe(120);
+  await app.open("b.md");expect(scroll.scrollTop).toBe(0);
+ });
  it("opens the new-note dialog with Ctrl+N",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});
