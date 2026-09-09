@@ -84,6 +84,12 @@ The user authorized Phase 5 and review corrections. **D17 resolved:** source-bod
 
 Autosave uses a 400 ms debounce with per-selected-note serialized revision/generation snapshots. Native close is a frontend flush handshake followed by blocking watcher shutdown. Failed operations retain buffers; stale/missing paths never force overwrite/recreate. Lifecycle operations retain their navigation lock through follow-up reads. D19 conflict choices remain Phase 6. No new rich-editor dependencies or broad filesystem/shell permissions were added.
 
+## Phase 6 implementation choices
+
+User authorized Phase 6. **D19 resolved:** explicit reload/local-discard or save local as a new note at a distinct literal no-clobber path. Both choices reobserve the original path after confirmation; core copy checks raw revision/absence under one lock before staging and just before replacement. Original frontmatter/BOM are retained separately from local body edits. No force-write, hash retargeting or implicit missing-path recreation.
+
+Watcher reads pause queued autosaves and wait for current acknowledgements. Saves verify their committed revision before clearing the buffer or allowing navigation/close, including delayed acknowledgements without newer typing. A committed write whose readback fails is not replayed by Retry save. Native two-process and simulated sync-copy evidence, cooperative-lock contention recovery, supported-YAML limitations and final external-writer race limits are recorded in [Phase 6](phase6.md).
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |
@@ -96,7 +102,7 @@ Autosave uses a 400 ms debounce with per-selected-note serialized revision/gener
 | D15 | CLI human output plus stable `--json`; explicit `id:` / `path:` selectors disambiguate; destructive CLI delete requires `--yes` or terminal confirmation | Scriptability and deliberate destruction; resolve in P1-06 |
 | D16 | Literal text search by default, explicit phrase/prefix modes, exact case-sensitive tag filter, component-aware folder filter | Avoid exposing raw FTS syntax accidentally; resolve in P2-02 |
 | D17 | Source editor and sanitized preview first; rich mode only if round-trip spike passes | Meet v1 without sacrificing Markdown preservation; resolve in P5-01 |
-| D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note at a new no-clobber path; no blind force-overwrite | Preserve both versions without introducing history; resolve in P6-01 |
+| D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note at a new no-clobber path; no blind force-overwrite | Preserve both versions without introducing history; resolved in Phase 6 above |
 | D20 | No delete undo/history in v1; delete is a confirmed permanent filesystem removal | Source requires deletion but excludes history; make limitation visible; resolve in P1-06 |
 
 ## Evidence-required spikes

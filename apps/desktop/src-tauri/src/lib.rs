@@ -69,11 +69,7 @@ impl Mutation {
     }
 }
 
-fn expected_revision(
-    library: &Library,
-    path: &str,
-    supplied: &str,
-) -> Result<notes_core::Revision> {
+fn validate_revision(supplied: &str) -> Result<()> {
     if supplied.len() != 64
         || !supplied
             .bytes()
@@ -84,6 +80,15 @@ fn expected_revision(
             "revision must be 64 lowercase hexadecimal characters",
         ));
     }
+    Ok(())
+}
+
+fn expected_revision(
+    library: &Library,
+    path: &str,
+    supplied: &str,
+) -> Result<notes_core::Revision> {
+    validate_revision(supplied)?;
     // Revision deliberately has no public constructor. Match the literal token,
     // then pass the typed snapshot to core, which rechecks under its write lock.
     let revision = library.get(path).map_err(core_error)?.document.revision;
@@ -124,6 +129,7 @@ pub struct Note {
     pub title: String,
     pub tags: Vec<String>,
     pub body: String,
+    pub source: String,
     pub revision: notes_core::Revision,
 }
 #[derive(Serialize)]
@@ -322,7 +328,7 @@ impl Backend {
     }
     pub fn open(&self, session: u64, path: &str) -> Result<Note> {
         self.with_selection(session, |s| {
-            let entry = s.library.get(path).map_err(err)?;
+            let entry = s.library.get(path).map_err(core_error)?;
             let d = entry.document;
             Ok(Note {
                 session,
@@ -330,6 +336,7 @@ impl Backend {
                 title: d.title.clone(),
                 tags: d.tags.clone(),
                 body: d.body,
+                source: d.source,
                 revision: d.revision,
             })
         })
@@ -338,6 +345,49 @@ impl Backend {
         self.with_selection(session, |s| {
             let expected = expected_revision(&s.library, path, revision)?;
             Mutation::from_commit(session, path, s.library.update(path, &expected, body))
+        })
+    }
+    pub fn save_copy(
+        &self,
+        session: u64,
+        path: &str,
+        observed_revision: Option<&str>,
+        destination: &str,
+        base_source: &str,
+        body: &str,
+    ) -> Result<Mutation> {
+        self.with_selection(session, |s| {
+            let expected = observed_revision
+                .map(|supplied| {
+                    validate_revision(supplied)?;
+                    let absolute = notes_core::filesystem::safe_path(s.library.root(), path)
+                        .map_err(core_error)?;
+                    // Unlike normal editing, recovery can copy a valid base even
+                    // when the observed current source has malformed YAML.
+                    match std::fs::symlink_metadata(&absolute) {
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                            return Err(mutation_error(
+                                "conflict",
+                                "copy source observation changed",
+                            ));
+                        }
+                        Err(error) => return Err(core_error(error.into())),
+                        Ok(_) => {}
+                    }
+                    let bytes = notes_core::filesystem::read(&absolute).map_err(core_error)?;
+                    let revision = notes_core::revision(&bytes);
+                    if revision.to_string() != supplied {
+                        return Err(mutation_error("conflict", "note revision changed"));
+                    }
+                    Ok(revision)
+                })
+                .transpose()?;
+            Mutation::from_commit(
+                session,
+                destination,
+                s.library
+                    .save_copy(path, expected.as_ref(), destination, base_source, body),
+            )
         })
     }
     pub fn create_from_title(

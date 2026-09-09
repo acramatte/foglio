@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, P4-01–P4-04, and P5-01–P5-04 verified locally; hosted CI for Phases 1–5 pending. Phase 6 onward remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, P4-01–P4-04, P5-01–P5-04, and P6-01–P6-03 verified locally; hosted CI for Phases 1–6 pending. Phase 7 remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -145,9 +145,18 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P6-01 | P5-03, P5-04 | Define/implement clean refresh, dirty/saving conflict and missing-note states; resolve D19 | External update reloads clean note; dirty/in-flight edit pauses; external moves leave the old path missing unless reliably observed; no hash retargeting or implicit recreation (V23) |
-| [ ] | P6-02 | P6-01 | Implement explicit reload/discard and save-local-as-new conflict choices; repeated-change guards | Disk and local versions never silently discarded; save-copy uses a new no-clobber path; repeated external changes remain guarded (V23) |
-| [ ] | P6-03 | P6-02 | Run two-process end-to-end conflict and externally synchronized conflict-copy scenarios | Dirty edit + external write/move/delete and identical conflict copies preserve independent content without hash-based retargeting in running desktop (V23, V24) |
+| [x] | P6-01 | P5-03, P5-04 | Define/implement clean refresh, dirty/saving conflict and missing-note states; resolve D19 | External update reloads clean note; dirty/in-flight edit pauses; external moves leave the old path missing unless reliably observed; no hash retargeting or implicit recreation (V23) |
+| [x] | P6-02 | P6-01 | Implement explicit reload/discard and save-local-as-new conflict choices; repeated-change guards | Disk and local versions never silently discarded; save-copy uses a new no-clobber path; repeated external changes remain guarded (V23) |
+| [x] | P6-03 | P6-02 | Run two-process end-to-end conflict and externally synchronized conflict-copy scenarios | Dirty edit + external write/move/delete and identical conflict copies preserve independent content without hash-based retargeting in running desktop (V23, V24) |
+
+### Phase 6 completion evidence
+
+- **Tasks/status:** P6-01–P6-03 verified locally on Linux; user explicitly authorized Phase 6. Hosted CI pending.
+- **Decision:** D19 resolved to explicit discard/reload or literal new-path no-clobber copy preserving original metadata. Dirty/saving observations and save readback guard buffers; missing paths never auto-follow or resurrect.
+- **Implementation:** frontend conflict choices/state machine, core source guards and no-clobber copy, typed Tauri command, unit/integration/native regressions and CI step. No commit/push/PR. [Evidence and limits](phase6.md).
+- **Tests:** workspace formatting/tests/strict Clippy; 60 frontend tests and typecheck/build; CLI acceptance 12 + 4; native Phase 6 (9 scenarios) and Phase 5 (10 scenarios) on debug and optimized binaries; Phase 4 debug regression pass.
+- **Acceptance:** V23 clean/dirty/in-flight external edits, delayed acknowledgement with and without newer typing, native close protection, explicit discard/cancel, repeated writes/reappearance during choices, original metadata/body preservation, occupied/new destination guards, external move/delete and independent identical conflict copies. V24 remains a filesystem simulation; real provider/device transfer is P7.
+- **Limits:** supported-YAML and final external-writer race limits, explicit retry on transient cooperative-lock Busy, no crash drafts/history/installer/other-OS/hosted-CI claim. Current malformed/unreadable disk observations can block UI recovery until repaired.
 
 ## Phase 7 — Diagnostics, polish, release
 
@@ -157,6 +166,10 @@ Do not check a box just because code exists. The source brief's illustrative exa
 | [ ] | P7-02 | P6-03 | Keyboard shortcuts, focus/accessibility, fast navigation/search, empty/error polish; command palette only if justified | Keyboard-only create/find/edit/move workflow; focus and screen-reader labels checked; no new product scope (V26) |
 | [ ] | P7-03 | P6-03 | Benchmark 1k/50k corpora, warm/cold behavior and watcher convergence; finish platform fault/security matrix | Reproducible distributions meet agreed budgets or limitations block target claim; no fabricated timing or untested OS promises (V07, V15, V19, V25) |
 | [ ] | P7-04 | P7-01, P7-02, P7-03 | Package chosen OS targets; install smoke, README/help, `docs/sync.md`, recovery/limitations docs; final v1 acceptance | Fresh install and complete release workflow pass, including actual external-tool transfer to another device and DB deletion/rebuild; all required evidence linked (V24, V26, V27) |
+
+### P7-02 contention follow-up
+
+- [ ] Coordinate same-process watcher scans and desktop mutations to reduce spurious `busy` outcomes without weakening bounded external-process locks, stale revision checks or committed-outcome semantics. Phase 6 native regression observed safe retained-buffer failures requiring explicit Retry save; navigation acceptance exercises this recovery. Regress concurrent watcher/lifecycle/navigation activity before claiming contention-free UX.
 
 ## Deferred search UX
 

@@ -87,8 +87,7 @@ def main():
             return value
         def edit(text): js("const e=document.querySelector('[data-testid=source]');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}));",text)
         def open_note(path):
-            wait(lambda:js('return !!document.querySelector(arguments[0])',f'[data-note-path="{path}"]'),'note listed '+path)
-            click(f'[data-note-path="{path}"]')
+            wait(lambda:js('const e=document.querySelector(arguments[0]);if(!e)return false;e.click();return true',f'[data-note-path="{path}"]'),'listed note clicked '+path)
             wait(lambda:js('return document.querySelector(".metadata").textContent.includes(arguments[0])',path),'note opened '+path)
         def operation(action,value=None,folder=None,cancel=False):
             click(f'[data-testid={action}]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'operation dialog')
@@ -157,7 +156,21 @@ def main():
                 scenarios.append('create/edit/tag/untag/rename/collision/cancel/confirmed deletion')
                 # Navigation saves immediately, even before debounce fires.
                 open_note('preserve.md');click('[data-testid=source-mode]');edit(source()+'navigation tail\n');click('[data-note-path="other.md"]')
-                wait(lambda:js("return document.querySelector('.metadata').textContent.includes('other.md')"),'navigation flushed')
+                def navigated_after_flush():
+                    if js("return document.querySelector('.metadata').textContent.includes('other.md')"):
+                        return True
+                    # Busy is an explicit non-committing core outcome, not data loss.
+                    # Exercise the documented user recovery rather than hide/retry IPC.
+                    if js("return document.querySelector('[data-testid=save-status]').dataset.state==='save_error' && document.querySelector('[data-testid=save-error]').textContent.startsWith('busy:')"):
+                        assert 'navigation tail' in source()
+                        if js("return !!document.querySelector('dialog[open]')"):
+                            click('[data-testid=dialog-cancel]')
+                        else:
+                            js("Array.from(document.querySelectorAll('button')).find(e=>e.textContent==='Retry save').click()")
+                    elif saved() and not js("return !!document.querySelector('dialog[open]')"):
+                        js("document.querySelector('[data-note-path=\"other.md\"]')?.click()")
+                    return False
+                wait(navigated_after_flush,'navigation flushed or explicitly retried after non-committing busy')
                 assert note.read_bytes().endswith(b'navigation tail\r\n')
                 scenarios.append('navigation flush before switching')
                 open_note('mixed.md');click('[data-testid=source-mode]')

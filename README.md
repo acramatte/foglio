@@ -40,11 +40,11 @@ Markdown → core index/watcher → Tauri commands → navigation + source/previ
 Source buffer → revision-guarded autosave → core atomic file write → derived index
 ```
 
-Healthy monitoring is a quiet footer indicator, separate from save status. Use New note and the Source/Preview controls to edit, with Ctrl+E to toggle and Ctrl+S to flush. Autosave preserves frontmatter; tags, move/rename and permanent deletion have separate controls. Failed saves retain your source and block navigation/close. Stale or missing files pause autosave; Phase 6's reload/discard and save-copy choices remain open. Search behavior is unchanged.
+Healthy monitoring is a quiet footer indicator, separate from save status. Use New note and the Source/Preview controls to edit, with Ctrl+E to toggle and Ctrl+S to flush. Autosave preserves frontmatter; tags, move/rename and permanent deletion have separate controls. Failed saves retain your source and block navigation/close. Stale or missing files pause autosave. Use **Reload / discard local** for an explicitly confirmed discard, or **Save local as new note** to preserve your body and original frontmatter at a different no-clobber path. Choices recheck disk state; no original-path recreation or force-overwrite is offered. Saves verify their committed revision before allowing navigation/close. See [Phase 6 evidence and recovery limits](docs/phase6.md). Search behavior is unchanged.
 
 ## Scope and conventions
 
-This delivery completes **Phase 5 source editing and autosave** locally. Phase 6 conflict-resolution UX and Phase 7 release hardening remain open. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
+This delivery completes **Phase 6 external-change and conflict-resolution UX** locally. Phase 7 release hardening remains open. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.

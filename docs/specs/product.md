@@ -73,7 +73,7 @@ Preserve unsupported Markdown syntax as text; exclusion of a feature is not perm
 
 ## Scope interpretation
 
-- Desktop creation, source editing and guarded autosave are implemented in Phase 5. Rich mode is omitted after S03 preservation failure. Phase 6 reload/discard and save-copy conflict choices remain open. Search UX improvements are deferred; current literal search is unchanged.
+- Desktop creation, source editing and guarded autosave are implemented in Phase 5. Rich mode is omitted after S03 preservation failure. Phase 6 reload/discard and guarded new-path save-copy choices are implemented and verified locally; see [evidence and limits](../phase6.md). Search UX improvements are deferred; current literal search is unchanged.
 - Healthy watcher status belongs in a quiet footer: “Monitoring external changes”. It is not a save indicator; monitoring failures stay visible and actionable. Future save status is separate.
 
 - CommonMark plus useful GFM: tables, tasks, fenced code, links, strikethrough, and ordinary inline/block elements.

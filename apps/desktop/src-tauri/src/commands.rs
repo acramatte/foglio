@@ -63,6 +63,29 @@ async fn save_note(
     mutation_blocking(move || backend.save(session, &path, &revision, &body)).await
 }
 #[tauri::command]
+async fn save_note_copy(
+    backend: State<'_, Arc<Backend>>,
+    session: u64,
+    path: String,
+    observed_revision: Option<String>,
+    destination: String,
+    base_source: String,
+    body: String,
+) -> Result<Mutation> {
+    let backend = backend.inner().clone();
+    mutation_blocking(move || {
+        backend.save_copy(
+            session,
+            &path,
+            observed_revision.as_deref(),
+            &destination,
+            &base_source,
+            &body,
+        )
+    })
+    .await
+}
+#[tauri::command]
 async fn create_note(
     backend: State<'_, Arc<Backend>>,
     session: u64,
@@ -176,6 +199,7 @@ pub fn run() {
             search_notes,
             open_note,
             save_note,
+            save_note_copy,
             create_note,
             move_note,
             delete_note,

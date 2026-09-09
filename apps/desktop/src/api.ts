@@ -36,6 +36,7 @@ export interface Note {
   title: string;
   tags: string[];
   body: string;
+  source: string;
   revision: string;
 }
 export interface Mutation {
@@ -46,6 +47,7 @@ export interface Mutation {
   warnings: string[];
 }
 export interface Api {
+  copy(session: number, path: string, observedRevision: string | null, destination: string, baseSource: string, body: string): Promise<Mutation>;
   save(session: number, path: string, revision: string, body: string): Promise<Mutation>;
   create(session: number, title: string, folder: string | null, body: string, tags: string[]): Promise<Mutation>;
   move(session: number, path: string, revision: string, destination: string): Promise<Mutation>;
@@ -70,6 +72,7 @@ export interface Api {
   external(url: string): Promise<void>;
 }
 export const api: Api = {
+  copy: (session, path, observedRevision, destination, baseSource, body) => invoke("save_note_copy", {session, path, observedRevision, destination, baseSource, body}),
   save: (session, path, revision, body) => invoke("save_note", {session, path, revision, body}),
   create: (session, title, folder, body, tags) => invoke("create_note", {session, title, folder, body, tags}),
   move: (session, path, revision, destination) => invoke("move_note", {session, path, revision, destination}),
@@ -86,6 +89,10 @@ export const api: Api = {
     invoke("resolve_note_link", { session, fromPath, target }),
   external: (url) => invoke("open_external_link", { url }),
 };
+export function errorCode(error: unknown): string {
+  if (typeof error === "string") {try {return errorCode(JSON.parse(error));} catch {return "";}}
+  return error && typeof error === "object" && "code" in error ? String(error.code) : "";
+}
 export function errorText(error: unknown): string {
   if (typeof error === "string") {
     try {

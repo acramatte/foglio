@@ -1,11 +1,54 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor, preserveNewlines } from "./editor";
 import type { Mutation, Note } from "./api";
-const note: Note = {session:1,path:"a.md",title:"A",tags:[],body:"old",revision:"r0"};
+const note: Note = {session:1,path:"a.md",title:"A",tags:[],body:"old",source:"old",revision:"r0"};
 const ack = (revision="r1"): Mutation => ({session:1,path:"a.md",revision,file_committed:true,warnings:[]});
 function deferred<T>() { let resolve!:(value:T)=>void; const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve}; }
 afterEach(()=>vi.useRealTimers());
 describe("guarded autosave",()=>{
+ it("retries only readback after a committed save whose verification failed",async()=>{
+  const save=vi.fn().mockResolvedValue(ack());const read=vi.fn().mockRejectedValueOnce({code:"io",message:"Read denied"}).mockResolvedValue({...note,body:"local",revision:"r1"});
+  const editor=new Editor(note,save,()=>{},read);editor.edit("local");expect(await editor.flush()).toBe(false);
+  expect(editor.status).toBe("save_error");expect(await editor.retry()).toBe(true);expect(save).toHaveBeenCalledOnce();expect(read).toHaveBeenCalledTimes(2);editor.dispose();
+ });
+ it.each(["changed","missing"])("verifies the committed path before clearing the buffer or permitting close (%s)",async(kind)=>{
+  const disk=deferred<Note>();const read=vi.fn(()=>kind==="missing"?Promise.reject({code:"not_found",message:"Missing"}):disk.promise);
+  const editor=new Editor(note,vi.fn().mockResolvedValue(ack()),()=>{},read);
+  editor.edit("only retained local version");const flush=editor.flush();
+  await Promise.resolve();await Promise.resolve();expect(read).toHaveBeenCalledOnce();
+  disk.resolve({...note,body:"external",revision:"external"});expect(await flush).toBe(false);
+  expect(editor.body).toBe("only retained local version");expect(editor.status).toBe(kind==="missing"?"missing_on_disk":"conflict");editor.dispose();
+ });
+ it("pauses debounce throughout a slow observation and blocks a divergent queued save",async()=>{
+  vi.useFakeTimers();const disk=deferred<Note>();const save=vi.fn();const editor=new Editor(note,save,()=>{});
+  editor.edit("local");const check=editor.inspect(()=>disk.promise);const flush=editor.flush();
+  await vi.advanceTimersByTimeAsync(1500);expect(save).not.toHaveBeenCalled();
+  disk.resolve({...note,revision:"external",body:"external"});await check;expect(await flush).toBe(false);
+  expect(editor.body).toBe("local");expect(editor.status).toBe("conflict");editor.dispose();
+ });
+ it.each([false,true])("reads after an in-flight acknowledgement and guards newer typing (external=%s)",async(external)=>{
+  vi.useFakeTimers();const committed=deferred<Mutation>();const disk=deferred<Note>();
+  const save=vi.fn().mockReturnValueOnce(committed.promise).mockResolvedValue(ack("r2"));const read=vi.fn(()=>disk.promise);
+  const editor=new Editor(note,save,()=>{});editor.edit("first");await vi.advanceTimersByTimeAsync(400);
+  editor.edit("second");const check=editor.inspect(read);expect(read).not.toHaveBeenCalled();committed.resolve(ack());
+  await vi.advanceTimersByTimeAsync(1000);expect(read).toHaveBeenCalledOnce();expect(save).toHaveBeenCalledOnce();
+  disk.resolve({...note,revision:external?"external":"r1",body:external?"external":"first"});await check;
+  expect(editor.status).toBe(external?"conflict":"dirty");expect(editor.body).toBe("second");
+  await vi.advanceTimersByTimeAsync(400);expect(save).toHaveBeenCalledTimes(external?1:2);editor.dispose();
+ });
+ it("pauses a dirty buffer on divergent disk observations, even after local reversion",async()=>{
+  vi.useFakeTimers();const save=vi.fn();const editor=new Editor(note,save,()=>{});
+  editor.edit("local");editor.observe({...note,revision:"external",body:"external"});
+  expect(editor.status).toBe("conflict");editor.edit("old");
+  await vi.advanceTimersByTimeAsync(1000);expect(save).not.toHaveBeenCalled();expect(editor.status).toBe("conflict");editor.dispose();
+ });
+ it("ignores unchanged observations but never recreates an observed missing path",async()=>{
+  vi.useFakeTimers();const save=vi.fn();const editor=new Editor(note,save,()=>{});
+  editor.edit("local");editor.observe(note);expect(editor.status).toBe("dirty");
+  editor.observe(null);expect(editor.status).toBe("missing_on_disk");
+  editor.observe(note);expect(editor.status).toBe("conflict");
+  await vi.advanceTimersByTimeAsync(1000);expect(save).not.toHaveBeenCalled();editor.dispose();
+ });
  it("preserves mixed newlines across separated unsaved edits and exact reversion",async()=>{
   const body="A\r\nB\nC\r\nD";const save=vi.fn().mockResolvedValue(ack());const editor=new Editor({...note,body},save,()=>{});
   editor.edit("XA\nB\nC\nD");editor.edit("XA\nB\nC\nDY");expect(editor.body).toBe("XA\r\nB\nC\r\nDY");

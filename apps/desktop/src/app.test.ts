@@ -4,14 +4,88 @@ import { App } from "./app";
 import type { Api, Note, DesktopState, Browse } from "./api";
 const state: DesktopState = {session:1,root:"/notes",generation:1,watcher_active:true,error:null};
 const browse: Browse = {session:1,generation:1,root:"/notes",notes:[{path:"a.md",title:"One",tags:["work"]},{path:"b.md",title:"Two",tags:[]}],folders:["empty"],diagnostics:[],incomplete:false};
-const note = (path:string, body=path):Note => ({session:1,path,title:path,tags:[],body,revision:"hash"});
+const note = (path:string, body=path):Note => ({session:1,path,title:path,tags:[],body,source:body,revision:"hash"});
 function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promise<T>(r => {resolve=r}); return {promise,resolve}; }
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
 function setup(overrides:Partial<Api> = {}) {
- const api:Api = {save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
+ const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
+describe("Phase 6 conflict choices",()=>{
+ const click=(host:HTMLElement,id:string)=>host.querySelector<HTMLButtonElement>(`[data-testid=${id}]`)!.click();
+ const status=(host:HTMLElement)=>host.querySelector<HTMLElement>("[data-testid=save-status]")!.dataset.state;
+ async function conflicted(missing=false) {
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  let disk:Note|null={...note("a.md","disk"),revision:"disk"};
+  const {host,api}=setup();await app.start();await app.open("a.md");
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="local";source.dispatchEvent(new Event("input"));
+  if (missing) disk=null;
+  vi.mocked(api.open).mockImplementation(async(_s,path)=>{if(path!=="a.md") return {...note(path,"local"),revision:"copy"};if(!disk) throw {code:"not_found",message:"Missing"};return disk;});
+  vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});
+  await app.poll();expect(status(host)).toBe(missing?"missing_on_disk":"conflict");
+  return {host,api,source,setDisk:(value:Note|null)=>{disk=value;}};
+ }
+ async function dialog(host:HTMLElement,action:string) {
+  click(host,"conflict-"+action);await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+ }
+ function submit(host:HTMLElement,path="copy.md") {
+  const value=host.querySelector<HTMLInputElement>("[data-testid=operation-value]");if(value)value.value=path;
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+ }
+ it("cancels explicit discard, then reloads only the confirmed current disk snapshot",async()=>{
+  const {host,api,source}=await conflicted();await dialog(host,"reload");
+  expect(source.readOnly).toBe(true);click(host,"dialog-cancel");await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+  expect(source.value).toBe("local");expect(status(host)).toBe("conflict");
+  await dialog(host,"reload");expect(host.querySelector("[data-testid=dialog-submit]")?.textContent).toBe("Discard local source");submit(host);
+  await vi.waitFor(()=>expect(source.value).toBe("disk"));expect(status(host)).toBe("clean");expect(api.save).not.toHaveBeenCalled();
+ });
+ it.each(["reload","copy"])("retains the buffer when the source changes again during %s",async(action)=>{
+  const {host,api,source,setDisk}=await conflicted();await dialog(host,action);
+  setDisk({...note("a.md","new disk"),revision:"new disk"});submit(host);
+  await vi.waitFor(()=>expect(source.readOnly).toBe(false));expect(source.value).toBe("local");expect(status(host)).toBe("conflict");
+  expect(api.copy).not.toHaveBeenCalled();expect(host.textContent).toContain("changed again");
+ });
+ it("rechecks confirmed absence before discarding and never follows a reappeared path",async()=>{
+  const {host,source,setDisk}=await conflicted(true);await dialog(host,"reload");
+  setDisk({...note("a.md","reappeared"),revision:"reappeared"});submit(host);
+  await vi.waitFor(()=>expect(source.readOnly).toBe(false));expect(source.value).toBe("local");expect(status(host)).toBe("conflict");
+ });
+ it("explicitly discards a missing buffer without any mutation",async()=>{
+  const {host,api}=await conflicted(true);await dialog(host,"reload");submit(host);
+  await vi.waitFor(()=>expect(host.querySelector<HTMLElement>("[data-testid=save-status]")!.hidden).toBe(true));
+  expect(app.hasUnsavedChanges).toBe(false);expect(api.save).not.toHaveBeenCalled();expect(api.copy).not.toHaveBeenCalled();
+ });
+ it.each([false,true])("copies retained base source and body with an explicit present/absent guard (missing=%s)",async(missing)=>{
+  const {host,api,source}=await conflicted(missing);
+  vi.mocked(api.copy).mockResolvedValue({session:1,path:"copy.md",revision:"copy",file_committed:true,warnings:[]});
+  await dialog(host,"copy");submit(host);await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+  expect(api.copy).toHaveBeenCalledWith(1,"a.md",missing?null:"disk","copy.md","a.md","local");
+  expect(host.querySelector(".metadata")?.textContent).toContain("copy.md");expect(source.value).toBe("local");expect(status(host)).toBe("clean");
+ });
+ it("rejects copying a missing note back to its original path",async()=>{
+  const {host,api,source}=await conflicted(true);await dialog(host,"copy");submit(host,"a.md");
+  await vi.waitFor(()=>expect(source.readOnly).toBe(false));expect(api.copy).not.toHaveBeenCalled();expect(source.value).toBe("local");expect(status(host)).toBe("missing_on_disk");
+ });
+ it.each(["destination_exists","conflict"])("retains buffer and choices after backend %s",async(code)=>{
+  const {host,api,source}=await conflicted();vi.mocked(api.copy).mockRejectedValue({code,message:"guard failed"});
+  await dialog(host,"copy");submit(host);await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+  expect(source.value).toBe("local");expect(status(host)).toBe("conflict");expect(host.textContent).toContain("guard failed");
+ });
+ it("retains the buffer and committed-path evidence when a copy cannot be reopened",async()=>{
+  const {host,api,source}=await conflicted();
+  vi.mocked(api.copy).mockImplementation(async()=>{vi.mocked(api.open).mockRejectedValue({code:"not_found",message:"Copy removed"});return {session:1,path:"copy.md",revision:"copy",file_committed:true,warnings:[]};});
+  await dialog(host,"copy");submit(host);await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+  expect(source.value).toBe("local");expect(host.textContent).toContain("Copy committed at copy.md; it could not be reopened");expect(api.copy).toHaveBeenCalledOnce();
+ });
+ it("holds the operation lock until a committed copy's follow-up read completes",async()=>{
+  const {host,api,source}=await conflicted();const pending=deferred<Note>();
+  vi.mocked(api.copy).mockImplementation(async()=>{vi.mocked(api.open).mockReturnValue(pending.promise);return {session:1,path:"copy.md",revision:"copy",file_committed:true,warnings:[]};});
+  await dialog(host,"copy");submit(host);await vi.waitFor(()=>expect(api.open).toHaveBeenCalledWith(1,"copy.md"));
+  await app.open("b.md");await app.requestClose();expect(source.readOnly).toBe(true);expect(api.close).not.toHaveBeenCalled();
+  pending.resolve({...note("copy.md","local"),revision:"copy"});await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+ });
+});
 describe("desktop UI state", () => {
  it("toggles source and preview from either mode with the keyboard shortcut",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
@@ -99,17 +173,18 @@ describe("desktop UI state", () => {
   expect(host.querySelector("dialog")).toBeNull();expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(true);
   opened.resolve(note("one.md"));await vi.waitFor(()=>expect(host.querySelector<HTMLTextAreaElement>("textarea")!.readOnly).toBe(false));expect(api.create).toHaveBeenCalledOnce();
  });
- it("retries a dirty deferred watcher refresh after local reversion",async()=>{
+ it("requires explicit resolution after an observed conflict even if local edits revert",async()=>{
   const {host,api}=setup();await app.start();await app.open("a.md");const source=host.querySelector<HTMLTextAreaElement>("textarea")!;
   source.value="local";source.dispatchEvent(new Event("input"));vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});vi.mocked(api.open).mockResolvedValue({...note("a.md","external"),revision:"external"});await app.poll();
-  source.value="a.md";source.dispatchEvent(new Event("input"));await app.poll();expect(source.value).toBe("external");expect(host.querySelector("article")?.textContent).toContain("external");
+  source.value="a.md";source.dispatchEvent(new Event("input"));await app.poll();expect(source.value).toBe("a.md");expect(host.querySelector("[data-testid=save-status]")?.getAttribute("data-state")).toBe("conflict");
  });
  it("flushes before note navigation and protects the buffer during watcher refresh",async()=>{
   const saved=deferred<Awaited<ReturnType<Api['save']>>>();const {host,api}=setup({save:()=>saved.promise});await app.start();await app.open("a.md");
   const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="new local";source.dispatchEvent(new Event("input"));
   vi.mocked(api.state).mockResolvedValue({...state,generation:2});vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});await app.poll();
-  expect(source.value).toBe("new local");expect(api.open).toHaveBeenCalledTimes(1);
+  expect(source.value).toBe("new local");expect(api.open).toHaveBeenCalledTimes(2);
   const navigation=app.open("b.md");expect(source.readOnly).toBe(true);expect(api.open).not.toHaveBeenCalledWith(1,"b.md");
+  vi.mocked(api.open).mockImplementation(async(_s,path)=>({...note(path,path==="a.md"?"new local":path),revision:path==="a.md"?"r1":"hash"}));
   saved.resolve({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]});await navigation;
   expect(api.open).toHaveBeenLastCalledWith(1,"b.md");
  });
@@ -125,7 +200,7 @@ describe("desktop UI state", () => {
  it("waits for a save before completing native close",async()=>{
   const saved=deferred<Awaited<ReturnType<Api['save']>>>();const {host,api}=setup({save:()=>saved.promise});await app.start();await app.open("a.md");
   const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="last edit";source.dispatchEvent(new Event("input"));
-  const closing=app.requestClose();expect(api.close).not.toHaveBeenCalled();saved.resolve({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]});await closing;expect(api.close).toHaveBeenCalledOnce();
+  const closing=app.requestClose();expect(api.close).not.toHaveBeenCalled();vi.mocked(api.open).mockResolvedValue({...note("a.md","last edit"),revision:"r1"});saved.resolve({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]});await closing;expect(api.close).toHaveBeenCalledOnce();
  });
  it("cancels failed navigation and close without discarding source",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};

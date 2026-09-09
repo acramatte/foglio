@@ -335,6 +335,80 @@ impl Library {
         )?;
         self.index_after_commit(commit)
     }
+    /// Save a draft beside its source without overwriting either observed bytes
+    /// or a destination. `None` means the source was observed absent, not unchecked.
+    pub fn save_copy(
+        &self,
+        source_path: &str,
+        expected_source: Option<&crate::Revision>,
+        destination: &str,
+        base_source: &str,
+        body: &str,
+    ) -> Result<fs::Commit> {
+        self.save_copy_observed(
+            source_path,
+            expected_source,
+            destination,
+            base_source,
+            body,
+            || Ok(()),
+        )
+    }
+    fn save_copy_observed(
+        &self,
+        source_path: &str,
+        expected_source: Option<&crate::Revision>,
+        destination: &str,
+        base_source: &str,
+        body: &str,
+        mut before_replace: impl FnMut() -> Result<()>,
+    ) -> Result<fs::Commit> {
+        let _lock = self.lock()?;
+        let source_path_abs = fs::safe_path(&self.root, source_path)?;
+        let destination_abs = fs::safe_path(&self.root, destination)?;
+        if source_path.to_lowercase() == destination.to_lowercase() {
+            return Err(Error::new(
+                ErrorCode::Path,
+                "copy destination must differ from source",
+            ));
+        }
+        // Read raw bytes: source metadata may now be invalid, and copying never
+        // requires source write permission. Do not confuse I/O failures with absence.
+        let guard = || -> Result<()> {
+            fs::check_chain(&source_path_abs)?;
+            match disk::symlink_metadata(&source_path_abs) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    if expected_source.is_none() {
+                        return Ok(());
+                    }
+                }
+                Err(e) => return Err(e.into()),
+                Ok(_) => {
+                    if let Some(expected) = expected_source
+                        && revision(&fs::read(&source_path_abs)?) == *expected
+                    {
+                        return Ok(());
+                    }
+                }
+            }
+            Err(Error::new(
+                ErrorCode::Conflict,
+                "copy source observation changed",
+            ))
+        };
+        guard()?;
+        let fallback = destination_abs.file_stem().unwrap().to_str().unwrap();
+        let source = Document::parse(base_source.as_bytes(), fallback)?.with_body(body);
+        Document::parse(source.as_bytes(), fallback)?;
+        let commit = fs::save_observed(&destination_abs, source.as_bytes(), None, |stage| {
+            if stage == fs::Stage::BeforeReplace {
+                before_replace()?;
+                guard()?;
+            }
+            Ok(())
+        })?;
+        self.index_after_commit(commit)
+    }
     pub fn tag(
         &self,
         path: &str,
@@ -384,5 +458,63 @@ impl Library {
         let e = self.mutation_target(path, expected)?;
         let commit = fs::delete_file(&fs::safe_path(&self.root, &e.path)?, expected)?;
         self.index_after_commit(commit)
+    }
+}
+
+#[cfg(test)]
+mod copy_tests {
+    use super::*;
+
+    #[test]
+    fn late_source_changes_and_destination_races_do_not_commit() {
+        for scenario in ["changed", "removed", "reappeared", "collision"] {
+            let temp = tempfile::tempdir().unwrap();
+            let lib = Library::open(&temp.path().join("notes"), &temp.path().join("state"), true)
+                .unwrap();
+            let from = lib.root().join("a.md");
+            let to = lib.root().join("copy.md");
+            let expected = if scenario == "reappeared" {
+                None
+            } else {
+                disk::write(&from, "old").unwrap();
+                Some(revision(b"old"))
+            };
+            let result = lib.save_copy_observed(
+                "a.md",
+                expected.as_ref(),
+                "copy.md",
+                "old",
+                "draft",
+                || {
+                    // The same library lock spans both guards and filesystem staging.
+                    assert_eq!(lib.lock().unwrap_err().code, ErrorCode::Busy);
+                    match scenario {
+                        "removed" => disk::remove_file(&from)?,
+                        "collision" => disk::write(&to, "other writer")?,
+                        _ => disk::write(&from, "external")?,
+                    }
+                    Ok(())
+                },
+            );
+            assert_eq!(
+                result.unwrap_err().code,
+                if scenario == "collision" {
+                    ErrorCode::Exists
+                } else {
+                    ErrorCode::Conflict
+                }
+            );
+            if scenario == "collision" {
+                assert_eq!(disk::read_to_string(to).unwrap(), "other writer");
+            } else {
+                assert!(!to.exists());
+            }
+            assert!(disk::read_dir(lib.root()).unwrap().all(|e| {
+                !e.unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".foglio-stage-")
+            }));
+        }
     }
 }

@@ -4,6 +4,7 @@ import {
   type DesktopState,
   type Note,
   errorText,
+  errorCode,
 } from "./api";
 import { classifyLink, renderMarkdown } from "./markdown";
 import { Editor } from "./editor";
@@ -36,6 +37,7 @@ export class App {
   private readonly saveError = element("div", "", "save-error");
   private readonly tools = element("div", undefined, "editor-tools");
   private readonly retry = element("button", "Retry save");
+  private readonly resolution = element("div", undefined, "conflict-tools");
   private state: DesktopState | null = null;
   private browse: Browse | null = null;
   private note: Note | null = null;
@@ -65,7 +67,7 @@ export class App {
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() === "s") {
       event.preventDefault();
-      void this.editor?.flush();
+      if (!this.busy) void this.editor?.flush();
     }
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
@@ -145,7 +147,7 @@ export class App {
     this.source.dataset.testid="source";
     this.source.setAttribute("aria-label", "Markdown source (body only)");
     this.source.spellcheck=false;
-    this.source.addEventListener("input",()=>{this.editor?.edit(this.source.value);});
+    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);});
     for (const mode of ["source", "preview"] as const) {
       const button=element("button",mode === "source" ? "Source" : "Preview");
       button.dataset.testid=mode+"-mode";
@@ -161,8 +163,12 @@ export class App {
     this.saveError.dataset.testid="save-error";
     this.saveError.setAttribute("role","alert");
     this.retry.addEventListener("click",()=>{void this.editor?.retry();});
+    for (const [action,label] of [["reload","Reload / discard local"],["copy","Save local as new note"]] as const) {
+      const button=element("button",label);button.dataset.testid="conflict-"+action;
+      button.addEventListener("click",()=>{void this.resolveConflict(action);});this.resolution.append(button);
+    }
     this.previewScroll.append(this.preview);
-    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.source, this.previewScroll);
+    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.resolution, this.source, this.previewScroll);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -280,7 +286,7 @@ export class App {
       );
     // Monitoring refresh must not erase an unrelated operation failure.
     if (!changed) {
-      if (this.pendingRefresh && this.selected && !this.editor?.pending)
+      if (this.pendingRefresh && this.selected)
         await this.open(this.selected, true);
       return;
     }
@@ -497,14 +503,14 @@ export class App {
   async open(path: string, refresh = false): Promise<void> {
     if (refresh) this.pendingRefresh = true;
     if (!this.state?.root || this.busy || this.selecting) return;
-    if (refresh && this.editor?.pending) return;
     if (!refresh && this.editor?.pending && !await this.protect()) return;
     await this.readNote(path, refresh);
   }
   // Only the mutation owner calls this while busy; public navigation cannot bypass it.
   private async readNote(path: string, refresh = false): Promise<void> {
     if (!this.state?.root) return;
-    const refreshRevision = this.editor?.revision;
+    const refreshingEditor = this.editor;
+
     const request = ++this.noteRequest,
       epoch = this.epoch,
       session = this.state.session;
@@ -518,37 +524,103 @@ export class App {
     ))
       button.setAttribute("aria-pressed", String(button.dataset.notePath === path));
     try {
-      const note = await this.api.open(session, path);
+      const note = await (refresh && refreshingEditor
+        ? refreshingEditor.inspect(()=>this.api.open(session,path))
+        : this.api.open(session,path));
       if (
         !this.valid(epoch, note.session) ||
         request !== this.noteRequest ||
         note.path !== this.selected ||
-        (refresh && (!!this.editor?.pending || refreshRevision !== this.editor?.revision || this.busy))
+        (refresh && (this.editor !== refreshingEditor || this.busy))
       )
         return;
       this.pendingRefresh = false;
+      if (refresh && this.editor?.pending) {this.editor.observe(note);return;}
       if (refresh && this.editor?.revision === note.revision) return;
-      this.editor?.dispose();
-      this.note = note;
-      this.editor = new Editor(note, this.api.save, ()=>this.renderEditor());
-      this.source.value=note.body;
-      this.renderEditor();
-      this.metadata.replaceChildren(
-        element("span", note.path),
-        element("span", note.tags.map((t) => "#" + t).join(" ")),
-        element("small", "Body editing preserves frontmatter. Tags are managed separately."),
-      );
-      this.preview.innerHTML = renderMarkdown(note.body);
-      if (!note.body.trim())
-        this.preview.append(element("p", "This note is empty."));
-      this.previewScroll.scrollTop = 0;
+      this.installNote(note, refresh);
     } catch (error) {
-      if (this.valid(epoch, session) && request === this.noteRequest && !this.editor?.pending && (!refresh || (!this.busy && refreshRevision === this.editor?.revision))) {
+      if (this.valid(epoch, session) && request === this.noteRequest && (!refresh || (!this.busy && this.editor === refreshingEditor))) {
+        if (refresh && this.editor?.pending) {this.pendingRefresh=false;this.editor.unavailable(error);return;}
         this.pendingRefresh = false;
         this.editor?.dispose();this.editor=null;this.note=null;this.renderEditor();
         this.empty("Note unavailable", errorText(error));
       }
     }
+  }
+  private installNote(note: Note, preservePosition = false): void {
+    const start=this.source.selectionStart, end=this.source.selectionEnd;
+    const sourceScroll=this.source.scrollTop, previewScroll=this.previewScroll.scrollTop;
+    this.editor?.dispose();this.note=note;this.selected=note.path;
+    this.editor=new Editor(note,this.api.save,()=>this.renderEditor(),()=>this.api.open(note.session,note.path));
+    this.source.value=note.body;this.renderEditor();
+    this.metadata.replaceChildren(
+      element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" ")),
+      element("small","Body editing preserves frontmatter. Tags are managed separately."),
+    );
+    if (!note.body.trim()) this.preview.append(element("p","This note is empty."));
+    if (preservePosition) this.source.setSelectionRange(start,end);
+    this.source.scrollTop=preservePosition ? sourceScroll : 0;
+    this.previewScroll.scrollTop=preservePosition ? previewScroll : 0;
+  }
+  private async diskSnapshot(editor: Editor): Promise<Note | null> {
+    try {
+      const note=await this.api.open(editor.session,editor.path);
+      if (note.session!==editor.session || note.path!==editor.path) throw new Error("Invalid disk snapshot");
+      return note;
+    } catch(error) {if (errorCode(error)==="not_found") return null;throw error;}
+  }
+  private async resolveConflict(action: "reload" | "copy"): Promise<void> {
+    const editor=this.editor, base=this.note;
+    if (this.busy || this.selecting || !editor || !base || (editor.status!=="conflict" && editor.status!=="missing_on_disk")) return;
+    this.busy=true;this.noteRequest++;this.renderEditor();this.error.hidden=true;
+    try {
+      const observed=await this.diskSnapshot(editor);
+      if (this.stopped || this.editor!==editor) return;
+      editor.observe(observed);
+      const choice=action==="reload"
+        ? await this.dialog("Discard local source?", observed
+          ? `Discard your unsaved local source and reload the current disk version of ${editor.path}? This cannot be undone.`
+          : `${editor.path} is missing. Discard your retained local source and clear the selection? No file will be recreated. This cannot be undone.`,
+          undefined,"Discard local source")
+        : await this.dialog("Save local as new note",`Keep ${editor.path} untouched. Save your local body and its original frontmatter at a different library-relative .md path. Existing files are never overwritten.`,
+          [{label:"New note path",value:"",placeholder:"For example recovered/local-copy.md"}]);
+      if (choice===null || this.stopped || this.editor!==editor) return;
+      const current=await this.diskSnapshot(editor);
+      if (this.stopped || this.editor!==editor) return;
+      if (current?.revision!==observed?.revision) {
+        editor.observe(current);
+        this.report("The original path changed again while the choice was open. Nothing was discarded or copied. Review the current state and choose again.");return;
+      }
+      if (action==="reload") {
+        if (current) this.installNote(current,true);
+        else {
+          editor.dispose();this.editor=null;this.note=null;this.selected=null;
+          this.empty("Local source discarded","The original path is still missing. Select another note to continue.");
+        }
+      } else {
+        const destination=choice[0]!;
+        if (destination.toLowerCase()===editor.path.toLowerCase()) throw new Error("Choose a different path; the original path must not be recreated or overwritten.");
+        const result=await this.api.copy(editor.session,editor.path,current?.revision ?? null,destination,base.source,editor.body);
+        if (result.session!==editor.session || result.path!==destination || !result.file_committed || !result.revision) throw new Error("Invalid copy acknowledgement; local source retained.");
+        // Never lose the only retained buffer if the just-created copy is replaced,
+        // removed or unreadable before its follow-up read. A commit is not retried.
+        this.report(`Local copy committed at ${destination}. `+result.warnings.join("\n"));
+        let copied: Note;
+        try {copied=await this.api.open(editor.session,destination);} catch(error) {
+          this.report(`Copy committed at ${destination}; it could not be reopened. Local buffer retained. ${errorText(error)}`);return;
+        }
+        if (this.stopped || this.editor!==editor) return;
+        if (copied.session!==editor.session || copied.path!==destination || copied.revision!==result.revision) {
+          this.report(`Copy committed at ${destination}, but that path changed again. Your original local buffer is still retained.`);return;
+        }
+        this.installNote(copied);this.setMode("source");
+      }
+      this.pendingRefresh=false;
+      if (this.state) this.state={...this.state,generation:-1};
+    } catch(error) {
+      if (errorCode(error)==="conflict" || errorCode(error)==="not_found") editor.unavailable(error);
+      this.report(error);
+    } finally {this.busy=false;this.renderEditor();void this.poll();}
   }
   private setMode(mode: "source" | "preview"): void {
     this.mode=mode;this.renderEditor();
@@ -562,6 +634,9 @@ export class App {
     this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
     this.retry.hidden=editor?.status!=="save_error";
     this.source.readOnly=this.busy;
+    this.retry.disabled=this.busy;
+    this.resolution.hidden=editor?.status!=="conflict" && editor?.status!=="missing_on_disk";
+    for (const b of this.resolution.querySelectorAll("button")) b.disabled=this.busy;
     for (const b of this.tools.querySelectorAll<HTMLButtonElement>("button")) {
       b.disabled=this.busy || (b.dataset.testid==="untag-note" && !this.note?.tags.length);
       if (b.dataset.testid?.endsWith("-mode")) b.setAttribute("aria-pressed", String(b.dataset.testid===this.mode+"-mode"));
@@ -577,7 +652,7 @@ export class App {
     this.busy=true;this.renderEditor();
     try {
       if (await this.editor?.flush() !== false) return true;
-      await this.dialog("Unsaved changes", "Your buffer is retained. Navigation was cancelled. Resolve the save error or copy your source before leaving.");
+      await this.dialog("Unsaved changes", "Your buffer is retained. Navigation was cancelled. Use the conflict choices or resolve the save error before leaving.");
       return false;
     } finally {this.busy=false;this.renderEditor();}
   }
@@ -587,7 +662,7 @@ export class App {
     this.busy=true;this.renderEditor();
     try {await this.api.close();} catch(error) {this.report(error);this.busy=false;this.renderEditor();}
   }
-  private dialog(title: string, detail: string, fields?: DialogField[], destructive = false): Promise<string[] | null> {
+  private dialog(title: string, detail: string, fields?: DialogField[], destructive: boolean | string = false): Promise<string[] | null> {
     return new Promise(resolve=>{
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
       const form=element("form");form.method="dialog";
@@ -606,7 +681,7 @@ export class App {
       const cancel=element("button",controls.length || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
       const finish=(value:string[]|null)=>{dialog.close();dialog.remove();resolve(value);};
       cancel.addEventListener("click",()=>finish(null));form.append(cancel);
-      if (controls.length || destructive) {const submit=element("button",destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
+      if (controls.length || destructive) {const submit=element("button",typeof destructive === "string" ? destructive : destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
       form.addEventListener("submit",event=>{event.preventDefault();finish(controls.map(control=>control.value));});
       dialog.addEventListener("cancel",event=>{event.preventDefault();finish(null);});
       dialog.append(form);this.host.append(dialog);dialog.showModal();
