@@ -9,7 +9,7 @@
 
 A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and Tauri desktop source editor with guarded autosave.
 
-**Status: Phases 1–5 implemented and verified locally on Linux x86_64.** [Editing, autosave and verification](docs/phase5.md). [Desktop setup and native verification](docs/phase4.md). See [filesystem safety](docs/phase1.md), [index/search commands and benchmarks](docs/phase2.md), and [live reconciliation APIs, recovery and evidence](docs/phase3.md). Hosted CI for these changes is pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+**Status: Phases 1–6 and Phase 7 local hardening are implemented and verified locally on Linux x86_64.** Phase 7 adds read-only diagnostics, keyboard/focus hardening, reproducible 1k/50k-note measurements, and Debian packaging. See [Phase 7 evidence and open release gates](docs/phase7.md), [editing/autosave](docs/phase5.md), [external-change recovery](docs/phase6.md), [desktop setup](docs/phase4.md), [filesystem safety](docs/phase1.md), [index/search](docs/phase2.md), and [live reconciliation](docs/phase3.md). Hosted CI remains pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
 
 Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
 
@@ -27,11 +27,11 @@ python3 tests/acceptance/phase1.py
 python3 tests/acceptance/phase2.py
 ```
 
-The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`, `search`, `rescan`, `reindex`, `status`. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
+The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`, `search`, `rescan`, `reindex`, `doctor`, `status`. `doctor` is read-only and diagnoses source/cache state; it returns exit 5 when it finds issues. Use `reindex` explicitly to rebuild disposable derived state. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
 
 Tests use actual temporary files and the compiled executable with isolated HOME/XDG state. They cover non-mutating initialization and selection, body/metadata preservation, guarded lifecycle operations, stale writes, no-clobber collisions, permissions/ACLs, fault injection and a killed staged writer. The Python harness also exercises interactive deletion through a PTY and configuration deletion/reselection. It requires Python 3 on Linux; the platform test requires writable `/dev/shm` on a different filesystem from the temporary library.
 
-CI runs the locked build, Rust tests, Python acceptance harness, formatting, strict Clippy, and an isolated CLI help smoke on Ubuntu 24.04. Validate workflow syntax locally with `actionlint .github/workflows/ci.yml` (verified with actionlint 1.7.7). Core/CLI gates do not require Tauri or Node.
+CI runs locked Rust/frontend checks, Debian package construction and staged native WebKit acceptance on Ubuntu 24.04. Validate workflow syntax locally with `actionlint .github/workflows/ci.yml` (verified with actionlint 1.7.7). Core/CLI gates do not require Tauri or Node. To create a Debian/amd64 package locally, run `bash scripts/package-linux.sh`; see [Phase 7 evidence and limitations](docs/phase7.md) for the fresh-container install/uninstall smoke and remaining release gates.
 
 Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearing replacement targets, ownership-changing replacements, symlinks and hard-link mutations are refused. Cooperative locks do not protect against arbitrary external-writer or hostile ancestor-swap races. Read the [safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before use. macOS and Windows remain unsupported.
 
@@ -48,7 +48,7 @@ Healthy monitoring is a quiet footer indicator, separate from save status. Use N
 
 ## Scope and conventions
 
-This delivery completes **Phase 6 external-change and conflict-resolution UX** locally. Phase 7 release hardening remains open. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
+This delivery completes **Phase 7 local hardening and Debian qualification**. The v1 release gate remains open: performance budgets, large-corpus UI behavior, physical-display/assistive-technology qualification, hosted CI and actual second-device transfer still need evidence. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
 
 - Keep transport handling in CLI and domain behavior in the UI-independent core.
 - Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.
