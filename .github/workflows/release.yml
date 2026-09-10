@@ -58,7 +58,8 @@ jobs:
           npm ci
           npm run typecheck
           override="../../target/release-version.conf.json"
-          python3 ../../scripts/set-release-version.py "$FOLGLIO_VERSION" "$override"
+          mkdir -p ../../target
+          printf '{"version": "%s"}\n' "$FOLGLIO_VERSION" > "$override"
           npm run tauri -- build --bundles dmg --config "$override" ${{ matrix.name == 'macOS x86_64 (dmg + CLI tarball)' && '--target x86_64-apple-darwin' || '--target aarch64-apple-darwin' }} -- --locked
           cd ../..
           bash scripts/package-release.sh

@@ -17,7 +17,7 @@ cargo build --locked --release -p notes-cli
 if [[ -n "${FOLGLIO_VERSION:-}" ]]; then
   version="$FOLGLIO_VERSION"
 else
-  version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+  version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 fi
 out="target/release/foglio-notes-v${version}-${os}-${arch}.tar.gz"
 stage=$(mktemp -d)

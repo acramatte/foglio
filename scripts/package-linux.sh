@@ -15,7 +15,8 @@ if [[ -n "${FOLGLIO_VERSION:-}" ]]; then
   # Version override lives under target/ so it never enters the source tree.
   # Tauri resolves --config relative to apps/desktop/src-tauri, hence ../..
   override="target/release-version.conf.json"
-  python3 scripts/set-release-version.py "$FOLGLIO_VERSION" "$override"
+  mkdir -p target
+  printf '{"version": "%s"}\n' "$FOLGLIO_VERSION" > "$override"
 fi
 cargo build --locked --release -p notes-cli
 cd apps/desktop
