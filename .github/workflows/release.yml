@@ -23,10 +23,10 @@ jobs:
           - name: macOS x86_64 (dmg + CLI tarball)
             runs-on: macos-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24.18.0'
           cache: npm
@@ -76,8 +76,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          # Fill the X.Y.Z placeholders in the notes with the released version.
+          notes=$(mktemp)
+          sed "s/X\.Y\.Z/${GITHUB_REF_NAME#v}/g" .github/release-notes.md > "$notes"
           # First matrix job creates the release; the rest append their assets.
           gh release create "$GITHUB_REF_NAME" \
             --title "Foglio $GITHUB_REF_NAME" \
-            --notes-file .github/release-notes.md dist/* \
+            --notes-file "$notes" dist/* \
             || gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          rm -f "$notes"
