@@ -9,13 +9,54 @@
 
 A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and Tauri desktop source editor with guarded autosave.
 
-**Status: Phases 1–6 and Phase 7 local hardening are implemented and verified locally on Linux x86_64.** Phase 7 adds read-only diagnostics, keyboard/focus hardening, reproducible 1k/50k-note measurements, and Debian packaging. See [Phase 7 evidence and open release gates](docs/phase7.md), [editing/autosave](docs/phase5.md), [external-change recovery](docs/phase6.md), [desktop setup](docs/phase4.md), [filesystem safety](docs/phase1.md), [index/search](docs/phase2.md), and [live reconciliation](docs/phase3.md). Hosted CI remains pending; the [previous hosted run](https://github.com/acramatte/foglio/actions/runs/34130532775) covers Phase 0 only.
+## Your notes stay yours
 
-Markdown files are authoritative. SQLite is a disposable index. External editing is supported by the design; synchronization belongs to external filesystem tools.
+Foglio works with the Markdown files you already have. Open a folder of notes, repository documentation, or agent plans; Foglio never requires frontmatter, generated IDs, or a proprietary file format. Your files remain useful in any text editor.
+
+- **Browse a real library** — navigate folders, filter exact tags, and search titles, paths, tags, and note text.
+- **Write in Markdown** — create notes, edit source, and switch to a safe rendered preview. CommonMark and useful GFM, including tables, task lists, fenced code, links, and strikethrough, are supported.
+- **Keep control of changes** — guarded autosave preserves frontmatter and refuses silent overwrites. Rename, move, tag, and permanently delete notes through explicit controls.
+- **Use your normal tools too** — Foglio watches external edits. Clean notes refresh; if a note changes while you are editing, saving pauses and you can reload the file, discard local work deliberately, or save it as a new note.
+- **Find and repair derived state** — Markdown is authoritative; SQLite is only a disposable local index. The read-only `doctor` command explains source and cache problems, while `reindex` rebuilds the index without rewriting your notes.
+- **Work from the desktop or terminal** — the desktop app and `notes` command-line tool share the same local library and behavior. The scriptable CLI is practical for people and coding agents to search, create, and update Markdown through explicit local-file operations.
+
+```text
+Markdown files → local index and watcher → desktop navigation, source, and preview
+Source edits → revision-guarded autosave → atomic Markdown write → refreshed index
+```
+
+## Desktop
+
+Download the installer for your platform from [GitHub Releases](https://github.com/acramatte/foglio/releases). Current release `v0.1.1` includes:
+
+| Platform | Download | SHA-256 |
+|---|---|---|
+| macOS (Apple Silicon) | [`Foglio_0.1.1_aarch64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_aarch64.dmg) | `ccc20877f663303e42abc40fb5cafa4bbc954ea21cfc49334cbb094e9814016e` |
+| macOS (Intel) | [`Foglio_0.1.1_x64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_x64.dmg) | `d063ef51228419f93ddd84ebcbb93a6c350d5ebcab5c0d58bd195e8c72a846ab` |
+| Debian/Ubuntu (x86_64) | [`Foglio_0.1.1_amd64.deb`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_amd64.deb) | `bbf24be00f6dd60282fa6e0d6cf7c057feb50c0bf696e72f0333a3cf8a356655` |
+
+Standalone `notes` CLI archives are also available:
+
+| Platform | Download | SHA-256 |
+|---|---|---|
+| macOS (Apple Silicon) | [`foglio-notes-v0.1.1-darwin-aarch64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.1.1/foglio-notes-v0.1.1-darwin-aarch64.tar.gz) | `fb20b6446a2c85464d73f311b63a7d21ea23b5b4399eda9e29a0313d14911dce` |
+| Linux (x86_64) | [`foglio-notes-v0.1.1-linux-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.1.1/foglio-notes-v0.1.1-linux-x86_64.tar.gz) | `c9e9371abf322081dc18672f0225737c4ca98100e18a189f5af0d367cf681546` |
+
+Verify a download before installing it, for example: `sha256sum Foglio_0.1.1_amd64.deb` on Linux or `shasum -a 256 Foglio_0.1.1_aarch64.dmg` on macOS.
+
+Enter an existing library path to browse folders, tags, and search results. Use **New note** and the **Source/Preview** controls to edit; Ctrl+E toggles the view and Ctrl+S flushes a save. Selection and `init` never modify Markdown. Paths identify documents, while hashes protect revisions. Existing `id` metadata is preserved as ordinary metadata. See the [identity contract](docs/path-identity.md) and [editing and recovery details](docs/phase6.md).
+
+## Development
+
+To run the desktop app from source, install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`.
+
+**Status: Phases 1–6 and the local-hardening slice of Phase 7 are implemented and verified locally on Linux x86_64.** This includes diagnostics, keyboard/focus hardening, reproducible 1k/50k-note measurements, and Debian packaging. The v1 release gate remains open: hosted CI, agreed performance budgets, large-library UI behavior, physical-display/assistive-technology qualification, and an actual second-device transfer still need evidence. See [Phase 7 evidence and open release gates](docs/phase7.md).
+
+The documented file-safety qualification currently covers Linux local filesystems. Foglio deliberately refuses risky replacements involving symlinks, hard links, ownership changes, and ACL/xattr-bearing targets. Cooperative locking cannot prevent arbitrary external-writer or hostile ancestor-swap races. Read the [filesystem safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before relying on it.
 
 ## Build and test
 
-Install [Rust using rustup](https://rustup.rs/). `rust-toolchain.toml` selects Rust 1.93.1 with rustfmt and Clippy. System-packaged Rust must provide that toolchain and both components separately.
+Install [Rust using rustup](https://rustup.rs/). `rust-toolchain.toml` selects Rust 1.93.1 with rustfmt and Clippy. The core and CLI do not require the desktop dependencies.
 
 ```bash
 cargo build --locked -p notes-core -p notes-cli
@@ -27,46 +68,21 @@ python3 tests/acceptance/phase1.py
 python3 tests/acceptance/phase2.py
 ```
 
-The product is **Foglio**; packages remain `notes-core` and `notes-cli`, and the executable is `notes`. Commands: `init`, `new`, `list`, `show`, `move`, `delete`, `tags`, `tag add`, `tag remove`, `search`, `rescan`, `reindex`, `doctor`, `status`. `doctor` is read-only and diagnoses source/cache state; it returns exit 5 when it finds issues. Use `reindex` explicitly to rebuild disposable derived state. Global flags: `--library <root>` and `--json`. No arguments prints help without opening state. Unsupported commands/flags exit 2.
+The product is **Foglio**; the executable is `notes`. Its commands cover library selection, note creation and lifecycle, tags, literal search, reconciliation, index rebuilding, read-only diagnostics, and status. Run `notes --help` for the full interface.
 
-Tests use actual temporary files and the compiled executable with isolated HOME/XDG state. They cover non-mutating initialization and selection, body/metadata preservation, guarded lifecycle operations, stale writes, no-clobber collisions, permissions/ACLs, fault injection and a killed staged writer. The Python harness also exercises interactive deletion through a PTY and configuration deletion/reselection. It requires Python 3 on Linux; the platform test requires writable `/dev/shm` on a different filesystem from the temporary library.
+Tests use isolated temporary libraries and the compiled executable; personal notes are never used as fixtures. The full local qualification also covers the desktop app, native WebKit acceptance, Debian package construction, and staged-package execution. Run `bash scripts/package-linux.sh` to create a Debian/amd64 package. Detailed evidence, limits, and release blockers are in [Phase 7](docs/phase7.md).
 
-CI runs locked Rust/frontend checks, Debian package construction and staged native WebKit acceptance on Ubuntu 24.04. Validate workflow syntax locally with `actionlint .github/workflows/ci.yml` (verified with actionlint 1.7.7). Core/CLI gates do not require Tauri or Node. To create a Debian/amd64 package locally, run `bash scripts/package-linux.sh`; see [Phase 7 evidence and limitations](docs/phase7.md) for the fresh-container install/uninstall smoke and remaining release gates.
+## Project documents
 
-Linux local filesystems are the only supported Phase 1 target. ACL-/xattr-bearing replacement targets, ownership-changing replacements, symlinks and hard-link mutations are refused. Cooperative locks do not protect against arbitrary external-writer or hostile ancestor-swap races. Read the [safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before use. macOS and Windows remain unsupported.
-
-## Desktop
-
-Install the [native prerequisites](docs/phase4.md#build-and-run), then run `npm ci` and `npm run tauri -- dev` from `apps/desktop`. The built binary is `target/debug/foglio-desktop`; production builds use `target/release/foglio-desktop`. Enter an existing library path to browse folders, tags and search results with safe Markdown preview. Selection and `init` never modify Markdown. Supported files need no frontmatter or IDs. Paths identify documents; hashes protect revisions. Existing `id` metadata is preserved without identity semantics. External moves leave the old selection unavailable rather than silently following matching content. See the [identity contract and verification](docs/path-identity.md).
-
-```text
-Markdown → core index/watcher → Tauri commands → navigation + source/preview
-Source buffer → revision-guarded autosave → core atomic file write → derived index
-```
-
-Healthy monitoring is a quiet footer indicator, separate from save status. Use New note and the Source/Preview controls to edit, with Ctrl+E to toggle and Ctrl+S to flush. Autosave preserves frontmatter; tags, move/rename and permanent deletion have separate controls. Failed saves retain your source and block navigation/close. Stale or missing files pause autosave. Use **Reload / discard local** for an explicitly confirmed discard, or **Save local as new note** to preserve your body and original frontmatter at a different no-clobber path. Choices recheck disk state; no original-path recreation or force-overwrite is offered. Saves verify their committed revision before allowing navigation/close. See [Phase 6 evidence and recovery limits](docs/phase6.md). Search behavior is unchanged.
-
-## Scope and conventions
-
-This delivery completes **Phase 7 local hardening and Debian qualification**. The v1 release gate remains open: performance budgets, large-corpus UI behavior, physical-display/assistive-technology qualification, hosted CI and actual second-device transfer still need evidence. Rich editing was omitted after the preservation spike. No daemon, sync integration, encryption, history or plugin scaffold is included.
-
-- Keep transport handling in CLI and domain behavior in the UI-independent core.
-- Pin selected toolchains/dependencies and retain `Cargo.lock` in version control.
-- Test only temporary libraries; never use personal notes as fixtures.
-- Use focused semantic commits and rationale-rich PRs with affected task IDs, phase status, and explicit **Tests** evidence. Do not merge main into feature branches; rebase when necessary.
-- The Markdown backlog is the durable task-status authority. Close tasks only against real execution evidence; hosted CI needs its own run evidence once a remote exists.
-
-## Project documents and precedence
-
-- [Product specification](docs/specs/product.md): scope and normative requirements.
+- [Product specification](docs/specs/product.md): user-facing scope and requirements.
 - [Technical specification](docs/specs/technical.md): domain and safety contracts.
 - [Implementation plan](docs/implementation-plan.md): phase gates and delivery discipline.
 - [Task backlog](docs/tasks.md): work items and execution evidence.
 - [Verification specification](docs/specs/verification.md): acceptance scenarios.
 - [Decision register](docs/decisions.md): established, accepted, and proposed choices.
 
-Source: the user-supplied **Headless Markdown Notes — v1 Specification & Implementation Plan.md**, sections 1–44, at `/home/alexis/Downloads/Headless Markdown Notes — v1 Specification & Implementation Plan.md`; it is not vendored here. Explicit user-approved amendments recorded in the decision register take precedence, followed by the original brief/product requirements, then technical contracts, then planning/task guidance. Proposed defaults are not accepted decisions. Surface contradictions instead of silently changing requirements.
+Foglio intentionally does not include a sync engine, encryption, version history, plugins, attachments, semantic/vector search, or AI features. Synchronize the notes folder with the filesystem tool you trust; Foglio will treat its changes as normal external edits.
 
 ## License
 
-[MIT](LICENSE), selected by the project owner for Phase 0.
+[MIT](LICENSE)
