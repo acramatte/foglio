@@ -231,7 +231,10 @@ fn save_observed_with_security(
         .prefix(".foglio-stage-")
         .suffix(".tmp")
         .tempfile_in(parent)?;
-    if check_security {
+    // A newly-created file has no existing metadata to preserve. Its ACLs and
+    // xattrs are inherited from the parent by the filesystem, so checking the
+    // staging inode here would reject ordinary macOS directories.
+    if check_security && original.is_some() {
         plain_security(temp.as_file())?;
     }
     if let Some(old) = &original {
