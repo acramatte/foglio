@@ -38,7 +38,11 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
       - name: Build Linux Debian package and CLI tarball
         if: runner.os == 'Linux'
+        env:
+          # Tag-derived version, e.g. v0.1.2 -> 0.1.2; bundle names follow it.
+          FOLGLIO_VERSION: ${{ github.ref_name }}
         run: |
+          export FOLGLIO_VERSION="${FOLGLIO_VERSION#v}"
           bash scripts/package-linux.sh
           bash scripts/package-release.sh
       - name: Add macOS cross-compilation target
@@ -46,11 +50,16 @@ jobs:
         run: rustup target add x86_64-apple-darwin
       - name: Build macOS dmg and CLI tarball
         if: runner.os == 'macOS'
+        env:
+          FOLGLIO_VERSION: ${{ github.ref_name }}
         run: |
+          export FOLGLIO_VERSION="${FOLGLIO_VERSION#v}"
           cd apps/desktop
           npm ci
           npm run typecheck
-          npm run tauri -- build --bundles dmg ${{ matrix.name == 'macOS x86_64 (dmg + CLI tarball)' && '--target x86_64-apple-darwin' || '--target aarch64-apple-darwin' }} -- --locked
+          override="../../target/release-version.conf.json"
+          python3 ../../scripts/set-release-version.py "$FOLGLIO_VERSION" "$override"
+          npm run tauri -- build --bundles dmg --config "$override" ${{ matrix.name == 'macOS x86_64 (dmg + CLI tarball)' && '--target x86_64-apple-darwin' || '--target aarch64-apple-darwin' }} -- --locked
           cd ../..
           bash scripts/package-release.sh
       - name: Collect artifacts

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Build a distributable release tarball for the notes CLI from this checkout.
 # Output: target/release/foglio-notes-v<version>-<os>-<arch>.tar.gz
+# The version comes from FOLGLIO_VERSION when set (CI release builds), else
+# from the workspace Cargo.toml version.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 case "$(uname -s)-$(uname -m)" in
@@ -12,7 +14,11 @@ case "$(uname -s)-$(uname -m)" in
 esac
 export CARGO_TARGET_DIR="$PWD/target"
 cargo build --locked --release -p notes-cli
-version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+if [[ -n "${FOLGLIO_VERSION:-}" ]]; then
+  version="$FOLGLIO_VERSION"
+else
+  version=$(cargo metadata --no-deps --format-version 1 | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+fi
 out="target/release/foglio-notes-v${version}-${os}-${arch}.tar.gz"
 stage=$(mktemp -d)
 trap 'rm -rf "$stage"' EXIT
