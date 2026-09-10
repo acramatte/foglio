@@ -178,13 +178,32 @@ pub enum Stage {
     AfterReplace,
 }
 pub fn save(path: &Path, bytes: &[u8], expected: Option<&crate::Revision>) -> Result<Commit> {
-    save_observed(path, bytes, expected, |_| Ok(()))
+    save_observed_with_security(path, bytes, expected, true, |_| Ok(()))
+}
+/// Application-owned configuration is not user data. On macOS, inherited ACLs
+/// and extended attributes are common even under an otherwise ordinary home
+/// directory; refusing to replace the config would prevent selecting a library.
+pub fn save_config(
+    path: &Path,
+    bytes: &[u8],
+    expected: Option<&crate::Revision>,
+) -> Result<Commit> {
+    save_observed_with_security(path, bytes, expected, false, |_| Ok(()))
 }
 /// Observer is for deterministic commit-boundary tests; errors after replace are committed outcomes.
 pub fn save_observed(
     path: &Path,
     bytes: &[u8],
     expected: Option<&crate::Revision>,
+    observe: impl FnMut(Stage) -> Result<()>,
+) -> Result<Commit> {
+    save_observed_with_security(path, bytes, expected, true, observe)
+}
+fn save_observed_with_security(
+    path: &Path,
+    bytes: &[u8],
+    expected: Option<&crate::Revision>,
+    check_security: bool,
     mut observe: impl FnMut(Stage) -> Result<()>,
 ) -> Result<Commit> {
     if bytes.len() > MAX_NOTE_BYTES {
@@ -195,7 +214,7 @@ pub fn save_observed(
     let mode = original
         .as_ref()
         .map_or_else(|| fs::Permissions::from_mode(0o600), |m| m.permissions());
-    if original.is_some() {
+    if check_security && original.is_some() {
         let old = OpenOptions::new()
             .read(true)
             .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
@@ -212,7 +231,9 @@ pub fn save_observed(
         .prefix(".foglio-stage-")
         .suffix(".tmp")
         .tempfile_in(parent)?;
-    plain_security(temp.as_file())?;
+    if check_security {
+        plain_security(temp.as_file())?;
+    }
     if let Some(old) = &original {
         let staged = temp.as_file().metadata()?;
         if old.uid() != staged.uid() || old.gid() != staged.gid() {
@@ -244,7 +265,9 @@ pub fn save_observed(
             .read(true)
             .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
             .open(path)?;
-        plain_security(&current)?;
+        if check_security {
+            plain_security(&current)?;
+        }
         temp.persist(path).map_err(|e| Error::from(e.error))?;
     } else {
         // Require the Linux atomic no-replace primitive; no link/unlink fallback.

@@ -163,7 +163,7 @@ impl Library {
         } else {
             None
         };
-        let outcome = fs::save(&config, &bytes, expected.as_ref())?;
+        let outcome = fs::save_config(&config, &bytes, expected.as_ref())?;
         if !outcome.durability_confirmed {
             return Err(Error::committed(
                 "root selected but durability uncertain",
@@ -185,7 +185,7 @@ impl Library {
         } else {
             None
         };
-        let outcome = fs::save(&config, &bytes, expected.as_ref())?;
+        let outcome = fs::save_config(&config, &bytes, expected.as_ref())?;
         if !outcome.durability_confirmed {
             return Err(Error::committed(
                 "root selected but durability uncertain",
