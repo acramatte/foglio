@@ -1,6 +1,10 @@
----
-id: 01M20M73Q6C0R4R3WGC69H8FDD
----
+> **✨ The origin story**
+> My note-taking app’s subscription expired right as GPT6-Astra dropped.
+> Coincidence? Maybe.
+> But Since I was only using a subset of the paid features anyway, I told 
+> myself that I might as well vibe-code my own.
+> And here it is: **raw, un-reviewed** (but tested) and 100% mine. 🚀
+
 # Foglio
 
 A local-first Markdown document application for notes, repository docs and agent specs/plans with a headless Rust core, filesystem CLI, and Tauri desktop source editor with guarded autosave.
