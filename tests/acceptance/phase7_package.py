@@ -8,13 +8,21 @@ Host WebKit/GTK dependencies are reused. No sudo or host package changes.
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
+_version = os.environ.get("FOLGLIO_VERSION")
+if not _version:
+    _toml = (ROOT / "Cargo.toml").read_text(encoding="utf-8")
+    _match = re.search(r'^version = "(.*)"$', _toml, re.MULTILINE)
+    assert _match, "Workspace Cargo.toml has no version"
+    _version = _match.group(1)
 PACKAGE = Path(os.environ.get(
-    "FOGLIO_DEB", ROOT / "target/release/bundle/deb/Foglio_0.1.0_amd64.deb"))
+    "FOGLIO_DEB",
+    ROOT / f"target/release/bundle/deb/Foglio_{_version}_amd64.deb"))
 
 
 def run(*args, env=None):
