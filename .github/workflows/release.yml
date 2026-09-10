@@ -24,6 +24,8 @@ jobs:
             runs-on: macos-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -76,9 +78,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          # Fill the X.Y.Z placeholders in the notes with the released version.
+          # Include commit subjects since the previous release above the shared details.
           notes=$(mktemp)
-          sed "s/X\.Y\.Z/${GITHUB_REF_NAME#v}/g" .github/release-notes.md > "$notes"
+          previous_tag=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          {
+            echo "## Changes since ${previous_tag:-the previous release}"
+            echo
+            if [ -n "$previous_tag" ]; then
+              git log --no-merges --format='- %s' "$previous_tag..$GITHUB_REF_NAME"
+            else
+              echo "- Initial release"
+            fi
+            echo
+            sed "s/X\.Y\.Z/${GITHUB_REF_NAME#v}/g" .github/release-notes.md
+          } > "$notes"
           # First matrix job creates the release; the rest append their assets.
           gh release create "$GITHUB_REF_NAME" \
             --title "Foglio $GITHUB_REF_NAME" \
