@@ -6,6 +6,8 @@ Local-first Markdown document application: headless Rust core, filesystem CLI (`
 
 - `foglio-notes-vX.Y.Z-linux-x86_64.tar.gz` — CLI-only (`notes`) plus README and LICENSE. Extract and copy `notes` to a directory on your `PATH`.
 - `Foglio_X.Y.Z_amd64.deb` — Debian package installing `/usr/bin/notes`, `/usr/bin/foglio-desktop` (Tauri desktop app), icon and desktop entry. Install with `sudo apt install ./Foglio_X.Y.Z_amd64.deb`.
+- `Foglio_X.Y.Z_aarch64.dmg` / `Foglio_X.Y.Z_x64.dmg` — **unsigned, experimental** macOS desktop builds (Apple Silicon / Intel). Right-click → Open on first launch to bypass Gatekeeper. The macOS port is unqualified: filesystem guarantees were verified on Linux only, and macOS/Windows remain unsupported platforms (see below).
+- `foglio-notes-vX.Y.Z-darwin-aarch64.tar.gz` / `-darwin-x86_64.tar.gz` — unsigned experimental macOS CLI builds.
 
 ## Known limitations
 
