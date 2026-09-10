@@ -1,5 +1,7 @@
 //! Disposable derived generations. All connections live under the library lock.
+mod doctor;
 use crate::{Document, Error, ErrorCode, Library, Result, filesystem, library::Diagnostic};
+pub use doctor::{DoctorDiagnostic, DoctorReport};
 use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::{
@@ -394,7 +396,10 @@ impl Library {
         }
         let tx = conn.transaction().map_err(db_error)?;
         if rebuild {
-            tx.execute_batch("DELETE FROM notes; DELETE FROM notes_fts; DELETE FROM files;")
+            // Empty FTS first: notes_delete looks up an UNINDEXED path. Leaving
+            // FTS populated while deleting every note makes a rebuild quadratic.
+            // Both clears remain in this transaction; rollback restores all tables.
+            tx.execute_batch("DELETE FROM notes_fts; DELETE FROM notes; DELETE FROM files;")
                 .map_err(db_error)?;
         }
         let previous: HashSet<String> = {

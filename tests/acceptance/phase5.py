@@ -79,7 +79,8 @@ def main():
         env['WEBKIT_DISABLE_DMABUF_RENDERER']='1'
         dport,nport=port(),port();driver=Driver(f'http://127.0.0.1:{dport}')
         def js(script,*args): return driver.js(script,*args)
-        def click(selector): js('document.querySelector(arguments[0]).click()',selector)
+        def click(selector):
+            wait(lambda: js('const e=document.querySelector(arguments[0]);if(!e || e.disabled)return false;e.click();return true', selector), 'enabled control clicked '+selector)
         def saved(): return js("return document.querySelector('[data-testid=save-status]').dataset.state === 'clean'")
         def source():
             value = js("return document.querySelector('[data-testid=source]').value")
@@ -87,7 +88,7 @@ def main():
             return value
         def edit(text): js("const e=document.querySelector('[data-testid=source]');e.value=arguments[0];e.dispatchEvent(new Event('input',{bubbles:true}));",text)
         def open_note(path):
-            wait(lambda:js('const e=document.querySelector(arguments[0]);if(!e)return false;e.click();return true',f'[data-note-path="{path}"]'),'listed note clicked '+path)
+            wait(lambda:js('const e=document.querySelector(arguments[0]);if(!e || e.disabled)return false;e.click();return true',f'[data-note-path="{path}"]'),'listed note clicked '+path)
             wait(lambda:js('return document.querySelector(".metadata").textContent.includes(arguments[0])',path),'note opened '+path)
         def operation(action,value=None,folder=None,cancel=False):
             click(f'[data-testid={action}]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'operation dialog')

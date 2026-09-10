@@ -14,6 +14,10 @@ The user approved removing IDs after trying Phase 4. There is no legacy-user com
 
 Current behavior and verification: [path identity](path-identity.md).
 
+## Phase 7 local execution choices
+
+The user authorized Phase 7 implementation on the established Linux-first scope, chose **measure first, then decide budgets**, and explicitly left actual second-device release acceptance blocked. The local package is Debian/amd64 version 0.1.0, with staged payload verification, not a completed fresh-OS/v1 release. `doctor` is strictly read-only; existing explicit `reindex` is the cache repair, never automatic source rewriting. See [Phase 7 evidence](phase7.md) and [benchmarks](phase7-benchmarks.md). Proposed performance numbers below remain proposals.
+
 ## Established decisions (historical where superseded)
 
 | ID | Decision | Rationale / source |

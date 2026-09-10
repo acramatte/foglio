@@ -1,0 +1,28 @@
+{"accepted":true,"bytes":1048588,"case":"body_1m","error":null,"expected_accepted":true,"kind":"robustness","ms":2.1841540000000004,"sample":0,"source_preserved":true}
+{"accepted":true,"bytes":1048588,"case":"body_1m","error":null,"expected_accepted":true,"kind":"robustness","ms":0.960881,"sample":1,"source_preserved":true}
+{"accepted":true,"bytes":1048588,"case":"body_1m","error":null,"expected_accepted":true,"kind":"robustness","ms":0.716306,"sample":2,"source_preserved":true}
+{"kind":"memory","stage":"body_1m","values":["VmHWM:\t   21856 kB","VmRSS:\t   15700 kB"]}
+{"accepted":true,"bytes":8388618,"case":"body_8m","error":null,"expected_accepted":true,"kind":"robustness","ms":17.285237,"sample":0,"source_preserved":true}
+{"accepted":true,"bytes":8388618,"case":"body_8m","error":null,"expected_accepted":true,"kind":"robustness","ms":12.445231,"sample":1,"source_preserved":true}
+{"accepted":true,"bytes":8388618,"case":"body_8m","error":null,"expected_accepted":true,"kind":"robustness","ms":15.462658000000001,"sample":2,"source_preserved":true}
+{"kind":"memory","stage":"body_8m","values":["VmHWM:\t   30764 kB","VmRSS:\t   14796 kB"]}
+{"accepted":false,"bytes":213,"case":"yaml_depth_100","error":"metadata: YAML nesting limit","expected_accepted":false,"kind":"robustness","ms":0.034106000000000004,"sample":0,"source_preserved":false}
+{"accepted":false,"bytes":213,"case":"yaml_depth_100","error":"metadata: YAML nesting limit","expected_accepted":false,"kind":"robustness","ms":0.00519,"sample":1,"source_preserved":false}
+{"accepted":false,"bytes":213,"case":"yaml_depth_100","error":"metadata: YAML nesting limit","expected_accepted":false,"kind":"robustness","ms":0.003998,"sample":2,"source_preserved":false}
+{"kind":"memory","stage":"yaml_depth_100","values":["VmHWM:\t   30764 kB","VmRSS:\t    6660 kB"]}
+{"accepted":false,"bytes":38,"case":"yaml_alias","error":"metadata: aliases, tags and flow mappings unsupported","expected_accepted":false,"kind":"robustness","ms":0.001974,"sample":0,"source_preserved":false}
+{"accepted":false,"bytes":38,"case":"yaml_alias","error":"metadata: aliases, tags and flow mappings unsupported","expected_accepted":false,"kind":"robustness","ms":0.000541,"sample":1,"source_preserved":false}
+{"accepted":false,"bytes":38,"case":"yaml_alias","error":"metadata: aliases, tags and flow mappings unsupported","expected_accepted":false,"kind":"robustness","ms":0.000411,"sample":2,"source_preserved":false}
+{"kind":"memory","stage":"yaml_alias","values":["VmHWM:\t   30764 kB","VmRSS:\t    6660 kB"]}
+{"accepted":false,"bytes":22,"case":"duplicate_yaml","error":"metadata: invalid YAML or duplicate key","expected_accepted":false,"kind":"robustness","ms":0.026632,"sample":0,"source_preserved":false}
+{"accepted":false,"bytes":22,"case":"duplicate_yaml","error":"metadata: invalid YAML or duplicate key","expected_accepted":false,"kind":"robustness","ms":0.003016,"sample":1,"source_preserved":false}
+{"accepted":false,"bytes":22,"case":"duplicate_yaml","error":"metadata: invalid YAML or duplicate key","expected_accepted":false,"kind":"robustness","ms":0.002124,"sample":2,"source_preserved":false}
+{"kind":"memory","stage":"duplicate_yaml","values":["VmHWM:\t   30764 kB","VmRSS:\t    6660 kB"]}
+{"accepted":false,"bytes":13,"case":"unterminated_yaml","error":"metadata: unterminated frontmatter","expected_accepted":false,"kind":"robustness","ms":0.00028000000000000003,"sample":0,"source_preserved":false}
+{"accepted":false,"bytes":13,"case":"unterminated_yaml","error":"metadata: unterminated frontmatter","expected_accepted":false,"kind":"robustness","ms":0.000141,"sample":1,"source_preserved":false}
+{"accepted":false,"bytes":13,"case":"unterminated_yaml","error":"metadata: unterminated frontmatter","expected_accepted":false,"kind":"robustness","ms":0.00009999999999999999,"sample":2,"source_preserved":false}
+{"kind":"memory","stage":"unterminated_yaml","values":["VmHWM:\t   30764 kB","VmRSS:\t    6660 kB"]}
+{"accepted":true,"bytes":31,"case":"raw_html_retained_not_rendered","error":null,"expected_accepted":true,"kind":"robustness","ms":0.012575000000000001,"sample":0,"source_preserved":true}
+{"accepted":true,"bytes":31,"case":"raw_html_retained_not_rendered","error":null,"expected_accepted":true,"kind":"robustness","ms":0.000701,"sample":1,"source_preserved":true}
+{"accepted":true,"bytes":31,"case":"raw_html_retained_not_rendered","error":null,"expected_accepted":true,"kind":"robustness","ms":0.000401,"sample":2,"source_preserved":true}
+{"kind":"memory","stage":"raw_html_retained_not_rendered","values":["VmHWM:\t   30764 kB","VmRSS:\t    6660 kB"]}

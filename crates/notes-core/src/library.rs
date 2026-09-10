@@ -44,6 +44,7 @@ impl Report {
 #[derive(Debug)]
 pub struct Library {
     root: PathBuf,
+    local: std::sync::Arc<crate::coordination::Gate>,
     state: PathBuf,
     pub(crate) cache: PathBuf,
     pub(crate) watcher_backends: std::sync::atomic::AtomicUsize,
@@ -127,6 +128,7 @@ impl Library {
         let cache = state.join("cache");
         Ok(Self {
             root,
+            local: Default::default(),
             state,
             cache,
             watcher_backends: std::sync::atomic::AtomicUsize::new(0),
@@ -194,11 +196,13 @@ impl Library {
         Ok((lib, report))
     }
     pub fn lock(&self) -> Result<fs::LibraryLock> {
+        let local = self.local.acquire()?;
         fs::check_chain(&self.root)?;
-        fs::lock(&self.state.join("locks").join(format!(
+        let lock = fs::lock(&self.state.join("locks").join(format!(
             "{}.lock",
             revision(self.root.as_os_str().as_encoded_bytes())
-        )))
+        )))?;
+        Ok(lock.with_local(local))
     }
     pub fn scan(&self) -> Result<Report> {
         let mut report = Report::default();

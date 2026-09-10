@@ -1,0 +1,132 @@
+{
+  "utc": "2026-09-09T21:22:42.287310+00:00",
+  "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.43",
+  "cpu": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M",
+  "mem_total": "MemTotal:       59998780 kB",
+  "affinity": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23
+  ],
+  "uid": 1000,
+  "filesystem": {
+    "command": [
+      "findmnt",
+      "-T",
+      "/home/alexis/Development/private",
+      "-n",
+      "-o",
+      "SOURCE,FSTYPE,OPTIONS"
+    ],
+    "returncode": 0,
+    "stdout": "/dev/mapper/ubuntu--vg-ubuntu--lv ext4 rw,relatime",
+    "stderr": ""
+  },
+  "block_devices": {
+    "command": [
+      "lsblk",
+      "-o",
+      "NAME,TYPE,ROTA,MODEL,FSTYPE,MOUNTPOINTS"
+    ],
+    "returncode": 0,
+    "stdout": "NAME                        TYPE  ROTA MODEL         FSTYPE      MOUNTPOINTS\nloop0                       loop     0               squashfs    /snap/core/17284\nloop1                       loop     0               squashfs    /snap/bare/5\nloop2                       loop     0               squashfs    /snap/core18/2979\nloop3                       loop     0               squashfs    /snap/core22/2411\nloop4                       loop     0               squashfs    /snap/core20/2769\nloop5                       loop     0               squashfs    /snap/core20/2866\nloop6                       loop     0               squashfs    /snap/core24/1643\nloop7                       loop     0               squashfs    /snap/core24/1587\nloop8                       loop     0               squashfs    /snap/core22/2437\nloop9                       loop     0               squashfs    /snap/core26/409\nloop10                      loop     0               squashfs    /snap/core/17292\nloop11                      loop     0               squashfs    /snap/core26/462\nloop12                      loop     0               squashfs    /snap/core18/2999\nloop13                      loop     0               squashfs    /snap/desktop-security-center/150\nloop14                      loop     0               squashfs    /snap/desktop-security-center/151\nloop15                      loop     0               squashfs    /snap/ffmpeg/1286\nloop16                      loop     0               squashfs    /snap/firefox/8819\nloop17                      loop     0               squashfs    /snap/firefox/8863\nloop18                      loop     0               squashfs    /snap/firmware-updater/226\nloop19                      loop     0               squashfs    /snap/firmware-updater/223\nloop20                      loop     0               squashfs    /snap/gnome-3-38-2004/143\nloop21                      loop     0               squashfs    /snap/gnome-3-28-1804/198\nloop22                      loop     0               squashfs    /snap/gnome-42-2204/263\nloop23                      loop     0               squashfs    /snap/gnome-42-2204/247\nloop24                      loop     0               squashfs    /snap/gnome-46-2404/153\nloop25                      loop     0               squashfs    /snap/gnome-46-2404/164\nloop26                      loop     0               squashfs    /snap/gtk-common-themes/1535\nloop27                      loop     0               squashfs    /snap/lxd/39858\nloop28                      loop     0               squashfs    /snap/lxd/40424\nloop29                      loop     0               squashfs    /snap/mesa-2404/1165\nloop30                      loop     0               squashfs    /snap/mqttx/52\nloop31                      loop     0               squashfs    /snap/mesa-2404/1839\nloop32                      loop     0               squashfs    /snap/pinta/94\nloop33                      loop     0               squashfs    /snap/mqttx/53\nloop34                      loop     0               squashfs    /snap/pinta/98\nloop35                      loop     0               squashfs    /snap/prompting-client/204\nloop36                      loop     0               squashfs    /snap/prompting-client/222\nloop37                      loop     0               squashfs    /snap/slack/254\nloop38                      loop     0               squashfs    /snap/snap-store/1367\nloop39                      loop     0               squashfs    /snap/slack/260\nloop40                      loop     0               squashfs    /snap/snap-store/1390\nloop41                      loop     0               squashfs    /snap/snapd/27710\nloop42                      loop     0               squashfs    /snap/snapd/27738\nloop43                      loop     0               squashfs    /snap/snapd-desktop-integration/391\nloop44                      loop     0               squashfs    /snap/snapd-desktop-integration/361\nloop45                      loop     0               squashfs    /snap/sqlc/39\nloop46                      loop     0               squashfs    /snap/standard-notes/1154\nloop47                      loop     0               squashfs    /snap/standard-notes/1155\nloop48                      loop     0               squashfs    /snap/workshop/523\nloop49                      loop     0               squashfs    /snap/ufw/653\nloop50                      loop     0               squashfs    /snap/workshop/561\nnvme1n1                     disk     0 CT1000P3PSSD8             \n\u251c\u2500nvme1n1p1                 part     0               vfat        /boot/efi\n\u251c\u2500nvme1n1p2                 part     0               ext4        /boot\n\u2514\u2500nvme1n1p3                 part     0               crypto_LUKS \n  \u2514\u2500dm_crypt-0              crypt    0               LVM2_member \n    \u2514\u2500ubuntu--vg-ubuntu--lv lvm      0               ext4        /\nnvme0n1                     disk     0 CT1000P3PSSD8             \n\u251c\u2500nvme0n1p1                 part     0                           \n\u2514\u2500nvme0n1p2                 part     0               ntfs",
+    "stderr": ""
+  },
+  "rustc": {
+    "command": [
+      "rustc",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "rustc 1.93.1 (01f6ddf75 2026-02-11)",
+    "stderr": ""
+  },
+  "cargo": {
+    "command": [
+      "cargo",
+      "--version"
+    ],
+    "returncode": 0,
+    "stdout": "cargo 1.93.1 (083ac5135 2025-12-15)",
+    "stderr": ""
+  },
+  "revision": {
+    "command": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "returncode": 0,
+    "stdout": "2f513c14b2fa76bee596990db8bd82efd177b861",
+    "stderr": ""
+  },
+  "dirty": {
+    "command": [
+      "git",
+      "status",
+      "--short"
+    ],
+    "returncode": 0,
+    "stdout": "M README.md\n M apps/desktop/src-tauri/tauri.conf.json\n M apps/desktop/src/app.test.ts\n M apps/desktop/src/app.ts\n M apps/desktop/src/style.css\n M crates/notes-cli/src/main.rs\n M crates/notes-core/Cargo.toml\n M crates/notes-core/src/filesystem.rs\n M crates/notes-core/src/index.rs\n M crates/notes-core/src/lib.rs\n M crates/notes-core/src/library.rs\n?? .codex/\n?? .entire/\n?? .pi/\n?? crates/notes-cli/tests/doctor.rs\n?? crates/notes-core/examples/phase7_benchmark.rs\n?? crates/notes-core/src/coordination.rs\n?? crates/notes-core/src/index/\n?? crates/notes-core/tests/coordination.rs\n?? crates/notes-core/tests/doctor.rs\n?? docs/phase7-benchmark-run1/\n?? docs/phase7-benchmark-run2/\n?? docs/sync.md\n?? scripts/\n?? tests/acceptance/phase7_benchmark.py\n?? tests/acceptance/phase7_keyboard.py\n?? tests/acceptance/phase7_package.py",
+    "stderr": ""
+  },
+  "build": "cargo build --locked --release -p notes-core --example phase7_benchmark",
+  "sha256": {
+    "target/release/examples/phase7_benchmark": "9bca298885febc8a29b0c00ce70b2ce476adc7b6295b314a5361c35d9d7dc271",
+    "Cargo.lock": "3ad9c1dd69d4bc77ca6b291357d9092a24445f0513ec33490e125b988c2499e1",
+    "crates/notes-core/examples/phase7_benchmark.rs": "6907a895a6d9573e05726c50e0f2a357b27c447e7b6a44cccfdfb5937b047914",
+    "tests/acceptance/phase7_benchmark.py": "74ccdae59c3317e91cf9c7b8968ad9ecbdbbbaf7e69e183c7e573652c6ad67bd"
+  },
+  "storage_base": "/home/alexis/Development/private",
+  "conditions": "Live workstation, not idle-isolated; no affinity pinning, cache dropping, thermal or frequency control. Other agents may compile/test. See continuous load samples. Source generation and manifest reads prewarm OS cache; DB-cold is not physical cold storage.",
+  "budget_gate": "not_evaluated_measure_first",
+  "initial_load": {
+    "utc": "2026-09-09T21:22:42.376669+00:00",
+    "loadavg": "3.60 4.33 3.59 2/5684 2005878",
+    "memory": [
+      "MemAvailable:   30688780 kB",
+      "SwapFree:        8386396 kB",
+      "Dirty:             23872 kB"
+    ],
+    "top_processes_lifetime_cpu": [
+      "PID COMMAND         %CPU",
+      "2005063 brave           22.1",
+      "2005817 python3         18.1",
+      "   1974 portmaster-core 14.2",
+      " 129386 Hermes           8.4",
+      "  22633 idea             5.0",
+      " 130104 hermes           4.3",
+      " 421964 lazydocker       3.8",
+      "   7101 gnome-shell      3.5",
+      "  10220 brave            3.4",
+      " 479096 brave            3.1",
+      "1530432 brave            3.1",
+      "  10153 brave            3.1",
+      "2002863 brave            2.7",
+      " 378121 brave            2.6",
+      " 394431 vibe             2.5"
+    ],
+    "cpu_pressure": "some avg10=0.03 avg60=0.07 avg300=0.69 total=173125625\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0"
+  }
+}

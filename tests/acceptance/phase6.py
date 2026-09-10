@@ -36,7 +36,7 @@ def main():
         js = driver.js
 
         def click(testid):
-            js('document.querySelector(arguments[0]).click()', f'[data-testid="{testid}"]')
+            wait(lambda: js('const e=document.querySelector(arguments[0]);if(!e || e.disabled)return false;e.click();return true', f'[data-testid="{testid}"]'), 'enabled control clicked '+testid)
 
         def state():
             return js("return document.querySelector('[data-testid=save-status]').dataset.state")
@@ -63,7 +63,7 @@ def main():
 
         def open_note(name):
             selector = f'[data-note-path="{name}"]'
-            wait(lambda: js('const e=document.querySelector(arguments[0]);if(!e)return false;e.click();return true', selector), 'listed note clicked '+name)
+            wait(lambda: js('const e=document.querySelector(arguments[0]);if(!e || e.disabled)return false;e.click();return true', selector), 'listed note clicked '+name)
             wait(lambda: js('return document.querySelector(".metadata").textContent.includes(arguments[0]) && !document.querySelector("textarea").readOnly', name), 'opened '+name)
             click('source-mode')
 

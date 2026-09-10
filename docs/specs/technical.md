@@ -73,7 +73,7 @@ Distinct paths remain distinct documents even with identical hashes or metadata.
 | `search(query, filters)` | Derived FTS results with relative paths; never use results as authority for writes |
 | `rescan()` | Read-only full content reconciliation; structured report |
 | `reindex()` | Rebuild derived state from complete filesystem reconciliation; preserve notes; diagnostics mean result is incomplete |
-| `doctor()` | Read-only inspection by default; no source rewriting; optional explicit safe repair invokes known operations |
+| `doctor()` | Strictly read-only source/cache inspection; no state creation or source rewriting. Explicit repair remains the separate `reindex()` operation; unknown schemas/unsafe paths are not automatically removed |
 | `status()` | Actual root, discovered/indexed/invalid counts, cache state, current process watcher state |
 
 Core error families: invalid path, not found, destination exists, invalid metadata, revision conflict, permission denied, unsupported filesystem, library busy, I/O failure, index degraded/corrupt. Avoid collapsing all failures into strings.

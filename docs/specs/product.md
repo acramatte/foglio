@@ -45,7 +45,7 @@ notes move <relative-path> <destination>
 notes delete <relative-path>
 ```
 
-Phase 1 includes this workflow, tag operations, and core update operations. Search and index commands arrive in Phase 2; watcher support in Phase 3; full doctor in Phase 7. Commands not yet implemented must not pretend to succeed.
+Phase 1 includes this workflow, tag operations, and core update operations. Search/index (Phase 2), watcher (Phase 3) and full read-only doctor (Phase 7 local slice) are now implemented. Commands not yet implemented must not pretend to succeed.
 
 ### Everyday desktop use
 

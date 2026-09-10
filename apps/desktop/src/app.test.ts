@@ -86,6 +86,58 @@ describe("Phase 6 conflict choices",()=>{
   pending.resolve({...note("copy.md","local"),revision:"copy"});await vi.waitFor(()=>expect(source.readOnly).toBe(false));
  });
 });
+describe("Phase 7 keyboard and accessibility", () => {
+ const key=(key:string, extra:KeyboardEventInit={})=>document.activeElement!.dispatchEvent(new KeyboardEvent("keydown",{key,ctrlKey:true,bubbles:true,cancelable:true,...extra}));
+ const get=<T extends HTMLElement>(host:HTMLElement,id:string)=>host.querySelector<T>(`[data-testid=${id}]`)!;
+ const dialogs=()=>{HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};};
+ it("focuses existing search, enters results, and retains result focus across refresh",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");get<HTMLButtonElement>(host,"source-mode").click();
+  key("f");expect(document.activeElement).toBe(get(host,"search-input"));
+  key("ArrowDown",{ctrlKey:false});expect(document.activeElement?.getAttribute("data-note-path")).toBe("a.md");
+  await app.loadList();expect(document.activeElement?.getAttribute("data-note-path")).toBe("a.md");
+  key("ArrowDown",{ctrlKey:false});expect(document.activeElement?.getAttribute("data-note-path")).toBe("b.md");
+  key("Escape",{ctrlKey:false});expect(document.activeElement).toBe(get(host,"search-input"));
+ });
+ it("provides labelled help, suppresses modal shortcuts, and returns focus on Escape",async()=>{
+  dialogs();const {host,api}=setup();await app.start();await app.open("a.md");
+  const help=get<HTMLButtonElement>(host,"keyboard-help");expect(help).not.toBeNull();help.focus();help.click();
+  const dialog=host.querySelector("dialog")!;expect(dialog.getAttribute("aria-describedby")).toBe("dialog-detail");expect(dialog.textContent).toContain("Ctrl+F");
+  key("n");key("e");expect(host.querySelectorAll("dialog")).toHaveLength(1);expect(get<HTMLElement>(host,"preview").hidden).toBe(false);expect(api.create).not.toHaveBeenCalled();
+  dialog.dispatchEvent(new Event("cancel",{cancelable:true}));expect(document.activeElement).toBe(help);
+ });
+ it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
+  dialogs();const {host}=setup();await app.start();await app.open("a.md");get<HTMLButtonElement>(host,"source-mode").click();key("e");
+  expect(document.activeElement).toBe(host.querySelector(".preview-scroll"));
+  const move=get<HTMLButtonElement>(host,"move-note");move.focus();move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  expect(document.activeElement).toBe(get(host,"operation-value"));host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
+  await vi.waitFor(()=>expect(move.disabled).toBe(false));expect(document.activeElement).toBe(move);
+ });
+ it("keeps filter focus and offers an actionable empty-results reset",async()=>{
+  const {host}=setup();await app.start();const filter=[...host.querySelectorAll<HTMLButtonElement>("nav button")].find(b=>b.textContent==="empty")!;filter.focus();filter.click();
+  expect(document.activeElement?.textContent).toBe("empty");
+  await vi.waitFor(()=>expect(get(host,"clear-filters")).not.toBeNull());get<HTMLButtonElement>(host,"clear-filters").click();
+  await vi.waitFor(()=>expect(host.querySelectorAll(".note-card")).toHaveLength(2));expect(document.activeElement).toBe(get(host,"search-input"));
+  expect(host.querySelector(".count")?.getAttribute("role")).toBe("status");expect(host.querySelector("nav")?.getAttribute("aria-label")).toBe("Library filters");
+ });
+ it("disables navigation through a mutation acknowledgement, including refreshed cards",async()=>{
+  dialogs();const pending=deferred<Awaited<ReturnType<Api["delete"]>>>();
+  const {host,api}=setup({delete:vi.fn(()=>pending.promise)});await app.start();await app.open("a.md");
+  get<HTMLButtonElement>(host,"delete-note").click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.delete).toHaveBeenCalled());
+  expect(host.querySelector<HTMLButtonElement>(".note-card")!.disabled).toBe(true);
+  expect(get<HTMLButtonElement>(host,"new-note").disabled).toBe(true);
+  await app.loadList();expect(host.querySelector<HTMLButtonElement>(".note-card")!.disabled).toBe(true);
+  pending.resolve({session:1,path:"a.md",revision:null,file_committed:true,warnings:[]});
+  await vi.waitFor(()=>expect(get<HTMLButtonElement>(host,"new-note").disabled).toBe(false));
+  expect(host.querySelector<HTMLButtonElement>(".note-card")!.disabled).toBe(false);
+ });
+ it("offers explicit result retry without changing literal search",async()=>{
+  const {host,api}=setup({search:vi.fn().mockRejectedValue({code:"busy",message:"Library busy"})});await app.start();const search=get<HTMLInputElement>(host,"search-input");search.value="literal words";await app.loadList();
+  const retry=get<HTMLButtonElement>(host,"retry-results");expect(retry).not.toBeNull();vi.mocked(api.search).mockResolvedValue({session:1,hits:[],incomplete:false});retry.click();
+  await vi.waitFor(()=>expect(api.search).toHaveBeenCalledTimes(2));expect(api.search).toHaveBeenLastCalledWith(1,"literal words",null,null);
+ });
+});
 describe("desktop UI state", () => {
  it("toggles source and preview from either mode with the keyboard shortcut",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");

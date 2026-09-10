@@ -43,7 +43,8 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 summary:focus-visible,
-a:focus-visible {
+a:focus-visible,
+.preview-scroll:focus-visible {
   outline: 2px solid #3f7460;
   outline-offset: 3px;
 }
@@ -368,6 +369,19 @@ footer {
   color: #8a9082;
   font-size: 10px;
   letter-spacing: 0.5px;
+}
+footer button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #56604f;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-height: 600px) {
+  .notes .new-note { margin-top: 8px; }
+  .notes input { margin-top: 10px; margin-bottom: 8px; }
+  .count { padding-bottom: 8px; }
 }
 [hidden] { display: none !important; }
 .editor-tools, .conflict-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }

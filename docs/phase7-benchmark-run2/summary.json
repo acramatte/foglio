@@ -1,0 +1,183 @@
+[
+  {
+    "corpus": 1000,
+    "command": [
+      "/home/alexis/Development/private/foglio/target/release/examples/phase7_benchmark",
+      "1000",
+      "/home/alexis/Development/private"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "wall_seconds": 3.872286840000015,
+    "metrics": {
+      "db_cold_rebuild_ms": {
+        "n": 3,
+        "p50_ms": 76.53861500000001,
+        "p95_ms": 83.356855,
+        "min_ms": 68.868488,
+        "max_ms": 83.356855
+      },
+      "warm_reconcile_ms": {
+        "n": 5,
+        "p50_ms": 11.8438,
+        "p95_ms": 12.084558000000001,
+        "min_ms": 11.305812999999999,
+        "max_ms": 12.084558000000001
+      },
+      "warm_process_open_status_ms": {
+        "n": 5,
+        "p50_ms": 15.315977,
+        "p95_ms": 22.376819,
+        "min_ms": 11.820244,
+        "max_ms": 22.376819
+      },
+      "search_session_acquire_ms": {
+        "n": 1,
+        "p50_ms": 11.748685,
+        "p95_ms": 11.748685,
+        "min_ms": 11.748685,
+        "max_ms": 11.748685
+      },
+      "search_selective_ms": {
+        "n": 100,
+        "p50_ms": 0.094094,
+        "p95_ms": 0.14243799999999998,
+        "min_ms": 0.07982500000000001,
+        "max_ms": 0.441739
+      },
+      "search_common_ms": {
+        "n": 100,
+        "p50_ms": 1.580606,
+        "p95_ms": 1.794352,
+        "min_ms": 1.543264,
+        "max_ms": 1.8588470000000001
+      },
+      "search_unicode_ms": {
+        "n": 100,
+        "p50_ms": 1.301734,
+        "p95_ms": 1.463829,
+        "min_ms": 1.256496,
+        "max_ms": 1.7158900000000001
+      },
+      "search_absent_ms": {
+        "n": 100,
+        "p50_ms": 0.069475,
+        "p95_ms": 0.118831,
+        "min_ms": 0.059606,
+        "max_ms": 0.168868
+      },
+      "watcher_start_ms": {
+        "n": 1,
+        "p50_ms": 29.823750999999998,
+        "p95_ms": 29.823750999999998,
+        "min_ms": 29.823750999999998,
+        "max_ms": 29.823750999999998
+      },
+      "watcher_convergence_ms": {
+        "n": 20,
+        "p50_ms": 152.014815,
+        "p95_ms": 159.008809,
+        "min_ms": 135.189853,
+        "max_ms": 163.38664
+      }
+    },
+    "budget_gate": "not_evaluated_measure_first"
+  },
+  {
+    "corpus": 50000,
+    "command": [
+      "/home/alexis/Development/private/foglio/target/release/examples/phase7_benchmark",
+      "50000",
+      "/home/alexis/Development/private"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "wall_seconds": 70.39268803199957,
+    "metrics": {
+      "db_cold_rebuild_ms": {
+        "n": 3,
+        "p50_ms": 1727.8761,
+        "p95_ms": 1831.661429,
+        "min_ms": 1708.928156,
+        "max_ms": 1831.661429
+      },
+      "warm_reconcile_ms": {
+        "n": 5,
+        "p50_ms": 745.839021,
+        "p95_ms": 756.882205,
+        "min_ms": 733.756807,
+        "max_ms": 756.882205
+      },
+      "warm_process_open_status_ms": {
+        "n": 5,
+        "p50_ms": 766.440374,
+        "p95_ms": 786.020371,
+        "min_ms": 744.1735659999999,
+        "max_ms": 786.020371
+      },
+      "search_session_acquire_ms": {
+        "n": 1,
+        "p50_ms": 740.268481,
+        "p95_ms": 740.268481,
+        "min_ms": 740.268481,
+        "max_ms": 740.268481
+      },
+      "search_selective_ms": {
+        "n": 100,
+        "p50_ms": 2.088324,
+        "p95_ms": 2.208679,
+        "min_ms": 1.92108,
+        "max_ms": 4.137212000000001
+      },
+      "search_common_ms": {
+        "n": 100,
+        "p50_ms": 89.856451,
+        "p95_ms": 93.040017,
+        "min_ms": 87.167075,
+        "max_ms": 102.623807
+      },
+      "search_unicode_ms": {
+        "n": 100,
+        "p50_ms": 84.2824,
+        "p95_ms": 87.655868,
+        "min_ms": 81.269567,
+        "max_ms": 108.068467
+      },
+      "search_absent_ms": {
+        "n": 100,
+        "p50_ms": 0.277821,
+        "p95_ms": 0.303,
+        "min_ms": 0.228245,
+        "max_ms": 0.45424400000000004
+      },
+      "watcher_start_ms": {
+        "n": 1,
+        "p50_ms": 1491.742514,
+        "p95_ms": 1491.742514,
+        "min_ms": 1491.742514,
+        "max_ms": 1491.742514
+      },
+      "watcher_convergence_ms": {
+        "n": 20,
+        "p50_ms": 1591.4653190000001,
+        "p95_ms": 1646.591401,
+        "min_ms": 1542.677951,
+        "max_ms": 1701.435496
+      }
+    },
+    "budget_gate": "not_evaluated_measure_first"
+  },
+  {
+    "corpus": "robustness",
+    "command": [
+      "/home/alexis/Development/private/foglio/target/release/examples/phase7_benchmark",
+      "robustness",
+      "/home/alexis/Development/private"
+    ],
+    "returncode": 0,
+    "timed_out": false,
+    "wall_seconds": 0.06509594900126103,
+    "metrics": {},
+    "budget_gate": "not_evaluated_measure_first"
+  }
+]

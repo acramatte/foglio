@@ -1,6 +1,6 @@
 # Implementation plan
 
-Status: Phase 0 complete locally and in hosted CI. Phases 1–6 implemented and verified locally on Linux; hosted CI for these changes is pending. Phase 7 remains open. [Phase 6 conflict evidence and limits](phase6.md). [Phase 5 editor evidence and limits](phase5.md). [Phase 4 native evidence and limits](phase4.md). See [Phase 1 evidence](phase1.md), [Phase 2 evidence](phase2.md), [Phase 3 evidence](phase3.md), and task status.
+Status: Phase 0 complete locally and in hosted CI. Phases 1–6 implemented and verified locally on Linux; hosted CI for these changes is pending. Phase 7 local diagnostics/keyboard work is verified; benchmarks and Debian payload smoke are available, but release qualification remains open. [Phase 7 evidence and blockers](phase7.md). [Phase 6 conflict evidence and limits](phase6.md). [Phase 5 editor evidence and limits](phase5.md). [Phase 4 native evidence and limits](phase4.md). See [Phase 1 evidence](phase1.md), [Phase 2 evidence](phase2.md), [Phase 3 evidence](phase3.md), and task status.
 
 ## Delivery strategy
 
@@ -24,6 +24,10 @@ Requirements: [product](specs/product.md). Contracts: [technical](specs/technica
 ## Accepted ordinary-Markdown amendment
 
 D26 removes embedded-ID semantics across core/index/CLI/watch/desktop before Phase 5. Paths locate documents and hashes protect revisions. D27 moves monitoring to a quiet footer. Search UX remains deferred, and desktop creation/editing stays Phase 5. See [path identity](path-identity.md).
+
+## Phase 7 authorization
+
+The user authorized Phase 7 local implementation, retained Linux-first scope, chose measurement before budget agreement, and explicitly left actual second-device transfer acceptance blocked. Debian/amd64 payload packaging is exercised locally, not a fresh-OS installation claim. See [evidence and remaining gates](phase7.md).
 
 ## Critical path and parallel work
 

@@ -1,0 +1,29 @@
+Get:1 http://archive.ubuntu.com/ubuntu resolute InRelease [136 kB]
+Get:2 http://security.ubuntu.com/ubuntu resolute-security InRelease [137 kB]
+Get:3 http://archive.ubuntu.com/ubuntu resolute-updates InRelease [137 kB]
+Get:4 http://security.ubuntu.com/ubuntu resolute-security/restricted amd64 Packages [489 kB]
+Get:5 http://archive.ubuntu.com/ubuntu resolute-backports InRelease [137 kB]
+Get:6 http://archive.ubuntu.com/ubuntu resolute/universe amd64 Packages [20.1 MB]
+Get:7 http://security.ubuntu.com/ubuntu resolute-security/universe amd64 Packages [212 kB]
+Get:8 http://security.ubuntu.com/ubuntu resolute-security/main amd64 Packages [578 kB]
+Get:9 http://security.ubuntu.com/ubuntu resolute-security/multiverse amd64 Packages [11.2 kB]
+Get:10 http://archive.ubuntu.com/ubuntu resolute/multiverse amd64 Packages [352 kB]
+Get:11 http://archive.ubuntu.com/ubuntu resolute/main amd64 Packages [1874 kB]
+Get:12 http://archive.ubuntu.com/ubuntu resolute/restricted amd64 Packages [189 kB]
+Get:13 http://archive.ubuntu.com/ubuntu resolute-updates/multiverse amd64 Packages [14.6 kB]
+Get:14 http://archive.ubuntu.com/ubuntu resolute-updates/universe amd64 Packages [338 kB]
+Get:15 http://archive.ubuntu.com/ubuntu resolute-updates/restricted amd64 Packages [505 kB]
+Get:16 http://archive.ubuntu.com/ubuntu resolute-updates/main amd64 Packages [743 kB]
+Get:17 http://archive.ubuntu.com/ubuntu resolute-backports/universe amd64 Packages [3306 B]
+Fetched 26.0 MB in 3s (9527 kB/s)
+Reading package lists...
+Reading package lists...
+Building dependency tree...
+Reading state information...
+Package webkit2gtk-driver is not available, but is referred to by another package.
+This may mean that the package is missing, has been obsoleted, or
+is only available from another source
+However the following packages replace it:
+  webkitgtk-webdriver
+
+E: Package 'webkit2gtk-driver' has no installation candidate

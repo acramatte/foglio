@@ -64,7 +64,14 @@ export class App {
   private readonly diagnostics = element("details", undefined, "diagnostics");
   private readonly count = element("span", "", "count");
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey) return;
+    // Native modal focus/Enter/Escape behavior owns input while a choice is open.
+    if (this.host.querySelector("dialog[open]")) return;
     if (!(event.ctrlKey || event.metaKey)) return;
+    if (event.key.toLowerCase() === "f") {
+      event.preventDefault();this.search.focus();this.search.select();return;
+    }
+    if (this.busy || this.selecting || event.shiftKey) return;
     if (event.key.toLowerCase() === "s") {
       event.preventDefault();
       if (!this.busy) void this.editor?.flush();
@@ -127,9 +134,29 @@ export class App {
       void this.loadList();
     });
     this.list.dataset.testid = "note-list";
-    this.list.setAttribute("aria-live", "polite");
+    this.count.setAttribute("role", "status");
+    this.navigation.setAttribute("aria-label", "Library filters");
+    this.search.setAttribute("aria-keyshortcuts", "Control+f Meta+f");
+    this.search.addEventListener("keydown", event => {
+      if (event.key === "ArrowDown" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();this.list.querySelector<HTMLButtonElement>(".note-card")?.focus();
+      }
+    });
+    this.list.addEventListener("keydown", event => {
+      if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      const cards=[...this.list.querySelectorAll<HTMLButtonElement>(".note-card")];
+      const index=cards.indexOf(this.host.ownerDocument.activeElement as HTMLButtonElement);
+      if (index < 0) return;
+      if (event.key === "Escape") {event.preventDefault();this.search.focus();}
+      else if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+        event.preventDefault();
+        const next=event.key==="Home" ? 0 : event.key==="End" ? cards.length-1 : Math.max(0,Math.min(cards.length-1,index+(event.key==="ArrowDown" ? 1 : -1)));
+        cards[next]?.focus();
+      }
+    });
     const create = element("button", "New note", "new-note");
     create.dataset.testid="new-note";
+    create.setAttribute("aria-keyshortcuts", "Control+n Meta+n");
     create.addEventListener("click",()=>{void this.mutate("create");});
     const listScroll = element("div", "", "note-list-scroll");
     listScroll.append(this.list);
@@ -137,7 +164,9 @@ export class App {
     const reader = element("section", undefined, "reader");
     reader.setAttribute("aria-label", "Note reader");
     this.preview.dataset.testid = "preview";
-    this.preview.setAttribute("aria-live", "polite");
+    this.previewScroll.tabIndex=0;
+    this.previewScroll.setAttribute("role", "region");
+    this.previewScroll.setAttribute("aria-label", "Note preview");
     this.preview.addEventListener("click", (event) => {
       void this.follow(event);
     });
@@ -176,8 +205,14 @@ export class App {
     const footer = element("footer");
     this.status.title =
       "Monitors changes made by external editors and sync tools. Save status is shown separately.";
+    const help=element("button", "Keyboard shortcuts");
+    help.dataset.testid="keyboard-help";help.type="button";
+    help.addEventListener("click",()=>{
+      if (this.busy || this.selecting || this.host.querySelector("dialog[open]")) return;
+      void this.dialog("Keyboard shortcuts", "Ctrl+N: create a note. Ctrl+F: focus library search (literal words; current filters apply). Arrow Down from search: focus results. Up/Down or Home/End: navigate results; Enter or Space: open. Escape in results: return to search. Ctrl+E: switch source/preview. Ctrl+S: save. Tab/Shift+Tab: reach all controls, including Move / rename. Enter: apply a dialog; Escape: cancel. On macOS use Command instead of Ctrl.");
+    });
     footer.append(
-      element("span", "Markdown source · Ctrl+N new note · Ctrl+E source/preview · Ctrl+S save"),
+      help,
       this.status,
     );
     host.append(
@@ -248,6 +283,7 @@ export class App {
     } finally {
       this.selecting = false;
       this.select.disabled = false;
+      this.renderEditor();
     }
   }
   async poll(): Promise<void> {
@@ -305,7 +341,7 @@ export class App {
       this.navigation.replaceChildren();
       this.diagnostics.replaceChildren();
     }
-    this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
+    if (!this.list.contains(this.host.ownerDocument.activeElement)) this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     if (!this.editor) this.metadata.replaceChildren();
     if (!state.root) {
       this.list.replaceChildren();
@@ -362,16 +398,19 @@ export class App {
   private renderNavigation(): void {
     if (!this.browse) return;
     const nav = this.navigation;
+    const focused=this.host.ownerDocument.activeElement;
+    const focusKey=nav.contains(focused) ? (focused as HTMLElement).dataset.filterKey : undefined;
     nav.replaceChildren();
-    const button = (text: string, active: boolean, action: () => void) => {
+    const button = (key: string, text: string, active: boolean, action: () => void) => {
       const b = element("button", text, active ? "filter active" : "filter");
       b.type = "button";
+      b.dataset.filterKey=key;
       b.setAttribute("aria-pressed", String(active));
       b.addEventListener("click", action);
       return b;
     };
     nav.append(
-      button("All notes", !this.folder && !this.tag, () => {
+      button("all", "All notes", !this.folder && !this.tag, () => {
         this.folder = null;
         this.tag = null;
         this.renderNavigation();
@@ -380,7 +419,7 @@ export class App {
       element("h3", "Folders"),
     );
     for (const path of this.browse!.folders) {
-      const b = button(path || "/", this.folder === path, () => {
+      const b = button("folder:"+path, path || "/", this.folder === path, () => {
         this.folder = this.folder === path ? null : path;
         this.renderNavigation();
         void this.loadList();
@@ -392,13 +431,14 @@ export class App {
     const tags = [...new Set(this.browse!.notes.flatMap((n) => n.tags))].sort();
     for (const tag of tags)
       nav.append(
-        button("# " + tag, this.tag === tag, () => {
+        button("tag:"+tag, "# " + tag, this.tag === tag, () => {
           this.tag = this.tag === tag ? null : tag;
           this.renderNavigation();
           void this.loadList();
         }),
       );
     if (!tags.length) nav.append(element("p", "No tags yet", "hint"));
+    if (focusKey !== undefined) ([...nav.querySelectorAll<HTMLButtonElement>("button")].find(b=>b.dataset.filterKey===focusKey) ?? nav.querySelector<HTMLButtonElement>("button"))?.focus();
   }
   private renderDiagnostics(): void {
     const browse = this.browse!;
@@ -408,13 +448,21 @@ export class App {
         `${browse.diagnostics.length} diagnostics${browse.incomplete ? " · Library results are incomplete" : " · Library scan complete"}`,
       ),
     );
-    for (const diagnostic of browse.diagnostics)
+    for (const diagnostic of browse.diagnostics) {
+      const action = diagnostic.code === "metadata"
+        ? "Check the frontmatter in an external editor; supported tags are a string list. Keep a backup before repairing metadata."
+        : diagnostic.code === "io" || diagnostic.code === "permission"
+          ? "Check that this path and its parent folders are readable by your user."
+          : diagnostic.code === "busy"
+            ? "Another library operation is active. Wait for it to finish, then retry."
+            : diagnostic.code === "index"
+              ? "Close other clients, run notes doctor for this library, then explicitly reindex disposable cache state if advised."
+              : "Inspect the reported path. Unsupported files are not rewritten or adopted.";
       this.diagnostics.append(
-        element(
-          "p",
-          `${diagnostic.path} — ${diagnostic.code}: ${diagnostic.message}`,
-        ),
+        element("p", `${diagnostic.path} — ${diagnostic.code}: ${diagnostic.message}`),
+        element("p", action, "hint"),
       );
+    }
     if (browse.incomplete)
       this.diagnostics.append(
         element(
@@ -430,6 +478,8 @@ export class App {
       epoch = this.epoch,
       session = this.state.session;
     const query = this.search.value.trim();
+    const focused=this.host.ownerDocument.activeElement as HTMLElement | null;
+    const focusedPath=this.list.contains(focused) ? focused?.dataset.notePath : undefined;
     this.count.textContent = "Loading…";
     this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     try {
@@ -464,6 +514,7 @@ export class App {
       for (const row of rows) {
         const b = element("button", undefined, "note-card");
         b.type = "button";
+        b.disabled = this.busy || this.selecting;
         b.dataset.notePath = row.path;
         b.setAttribute("aria-pressed", String(row.path === this.selected));
         b.append(
@@ -486,6 +537,16 @@ export class App {
             "empty-list",
           ),
         );
+      if (!rows.length && (query || this.tag || this.folder)) {
+        const clear=element("button","Clear search and filters");clear.dataset.testid="clear-filters";
+        clear.addEventListener("click",()=>{this.search.value="";this.tag=null;this.folder=null;this.renderNavigation();this.search.focus();void this.loadList();});
+        this.list.append(clear);
+      }
+      // Do not steal focus if the user left results while the read was pending.
+      if (focusedPath && this.host.ownerDocument.activeElement === this.host.ownerDocument.body) {
+        const card=[...this.list.querySelectorAll<HTMLButtonElement>(".note-card")].find(b=>b.dataset.notePath===focusedPath);
+        (card ?? this.search).focus();
+      }
     } catch (error) {
       if (this.valid(epoch, session) && request === this.listRequest) {
         this.report(error);
@@ -493,10 +554,12 @@ export class App {
         this.list.replaceChildren(
           element(
             "p",
-            "Could not load results. Change the search to retry.",
+            "Could not load results. Retry, or change the search.",
             "empty-list",
           ),
         );
+        const retry=element("button","Retry results");retry.dataset.testid="retry-results";
+        retry.addEventListener("click",()=>{this.search.focus();void this.loadList();});this.list.append(retry);
       }
     }
   }
@@ -557,7 +620,6 @@ export class App {
       element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" ")),
       element("small","Body editing preserves frontmatter. Tags are managed separately."),
     );
-    if (!note.body.trim()) this.preview.append(element("p","This note is empty."));
     if (preservePosition) this.source.setSelectionRange(start,end);
     this.source.scrollTop=preservePosition ? sourceScroll : 0;
     this.previewScroll.scrollTop=preservePosition ? previewScroll : 0;
@@ -624,9 +686,10 @@ export class App {
   }
   private setMode(mode: "source" | "preview"): void {
     this.mode=mode;this.renderEditor();
-    if (mode === "source" && this.editor) this.source.focus();
+    if (this.editor) (mode === "source" ? this.source : this.previewScroll).focus();
   }
   private renderEditor(): void {
+    for (const b of this.host.querySelectorAll<HTMLButtonElement>(".note-card, [data-testid=new-note]")) b.disabled=this.busy || this.selecting;
     const editor=this.editor;
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
     this.preview.hidden=!!editor && this.mode!=="preview";
@@ -646,6 +709,7 @@ export class App {
     this.saveStatus.textContent=labels[editor.status];this.saveStatus.dataset.state=editor.status;
     this.saveError.textContent=[editor.message,editor.warning].filter(Boolean).join("\n");
     this.preview.innerHTML=renderMarkdown(editor.body);
+    if (!editor.body.trim()) this.preview.append(element("p","This note is empty. Switch to Source to start writing."));
   }
   get hasUnsavedChanges(): boolean {return !!this.editor?.pending || this.busy;}
   private async protect(): Promise<boolean> {
@@ -667,7 +731,9 @@ export class App {
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
       const form=element("form");form.method="dialog";
       const heading=element("h2",title);heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
-      form.append(heading,element("p",detail));
+      const description=element("p",detail);description.id="dialog-detail";dialog.setAttribute("aria-describedby",description.id);
+      const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
+      form.append(heading,description);
       const controls=(fields ?? []).map((field,index)=>{
         const control=field.options ? element("select") : element("input");
         const label=element("label",field.label);control.id=`operation-value-${index}`;control.dataset.testid=field.testid ?? "operation-value";
@@ -679,7 +745,7 @@ export class App {
         form.append(label,control);return control;
       });
       const cancel=element("button",controls.length || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
-      const finish=(value:string[]|null)=>{dialog.close();dialog.remove();resolve(value);};
+      const finish=(value:string[]|null)=>{dialog.close();dialog.remove();if (origin?.isConnected) origin.focus();resolve(value);};
       cancel.addEventListener("click",()=>finish(null));form.append(cancel);
       if (controls.length || destructive) {const submit=element("button",typeof destructive === "string" ? destructive : destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}
       form.addEventListener("submit",event=>{event.preventDefault();finish(controls.map(control=>control.value));});
@@ -690,6 +756,7 @@ export class App {
   }
   private async mutate(action: "create" | "move" | "tag" | "untag" | "delete"): Promise<void> {
     if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor) || (action==="untag" && !this.note?.tags.length)) return;
+    const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
     this.busy=true;this.renderEditor();this.error.hidden=true;
     try {
       if (await this.editor?.flush() === false) {
@@ -721,7 +788,10 @@ export class App {
       else {await this.readNote(result.path);if (action==="create") this.setMode("source");}
       if (result.warnings.length) this.report("File committed. "+result.warnings.join("\n"));
       if (this.state) this.state={...this.state,generation:-1};
-    } catch(error) {this.report(error);} finally {this.busy=false;this.renderEditor();}
+    } catch(error) {this.report(error);} finally {
+      this.busy=false;this.renderEditor();
+      if (origin?.isConnected && (this.host.ownerDocument.activeElement===this.host.ownerDocument.body || this.host.ownerDocument.activeElement===origin)) origin.focus();
+    }
     void this.poll();
   }
   private async follow(event: MouseEvent): Promise<void> {

@@ -310,7 +310,13 @@ pub fn delete_file(path: &Path, expected: &crate::Revision) -> Result<Commit> {
 /// Explicit unlock on drop also releases locks inherited by a concurrent fork
 /// before that child reaches exec. Closing only our fd can leave its copy locked.
 #[derive(Debug)]
-pub struct LibraryLock(File);
+pub struct LibraryLock(File, Option<crate::coordination::Permit>);
+impl LibraryLock {
+    pub(crate) fn with_local(mut self, permit: crate::coordination::Permit) -> Self {
+        self.1 = Some(permit);
+        self
+    }
+}
 impl Drop for LibraryLock {
     fn drop(&mut self) {
         let _ = fs2::FileExt::unlock(&self.0);
@@ -337,5 +343,5 @@ pub fn lock(path: &Path) -> Result<LibraryLock> {
             "library is locked by another Foglio process",
         )
     })?;
-    Ok(LibraryLock(f))
+    Ok(LibraryLock(f, None))
 }

@@ -66,12 +66,9 @@ jobs:
         run: |
           cargo test --locked -p notes-desktop
           cargo clippy --locked -p notes-desktop --all-targets -- -D warnings
-      - name: Build actual desktop
-        working-directory: apps/desktop
-        run: npm run tauri -- build --no-bundle
-      - name: Native WebKit acceptance
+      - name: Build Linux Debian package with both executables
+        run: bash scripts/package-linux.sh
+      - name: Staged package and native WebKit acceptance
         run: |
           cargo install tauri-driver --version 2.0.6 --locked
-          FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase4.py
-          FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase5.py
-          FOGLIO_DESKTOP_BINARY="$PWD/target/release/foglio-desktop" python3 tests/acceptance/phase6.py
+          python3 tests/acceptance/phase7_package.py

@@ -12,7 +12,7 @@ use std::{
     name = "notes",
     version,
     about = "Foglio: local-first Markdown notes",
-    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Paths are library-relative .md paths; no IDs or adoption required. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/busy. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
+    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Paths are library-relative .md paths; no IDs or adoption required. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/busy; 5 doctor found issues. doctor is read-only; reindex is the explicit cache repair. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
 )]
 struct Cli {
     #[arg(long, global = true)]
@@ -59,6 +59,8 @@ enum Command {
     Reindex,
     /// Reconcile metadata candidates and report actual index/process state.
     Status,
+    /// Read-only source/cache health check. Reports issues with exit 5; repair explicitly with reindex.
+    Doctor,
     /// Print the complete Markdown document.
     Show {
         path: String,
@@ -147,6 +149,23 @@ fn execute(cli: &Cli) -> Result<Output> {
                 .iter()
                 .map(|h| format!("{}\t{}\n{}\n", h.path, h.title, h.snippet))
                 .collect();
+            (json!(report), human)
+        }
+        Command::Doctor => {
+            let report = lib.doctor()?;
+            diagnostics = json!(report.diagnostics);
+            incomplete = report.incomplete;
+            let mut human = format!(
+                "{} discovered; {} indexed; {} stale; {} orphan; {} unindexed\nRead-only inspection; repair derived state explicitly with reindex.\n",
+                report.discovered_notes,
+                report.indexed_notes,
+                report.stale_notes,
+                report.orphan_records,
+                report.unindexed_notes,
+            );
+            if let Some(path) = &report.cache_path {
+                human.push_str(&format!("Disposable index: {}\n", path.display()));
+            }
             (json!(report), human)
         }
         Command::Rescan | Command::Reindex | Command::Status => {
@@ -301,13 +320,22 @@ fn main() -> ExitCode {
                             d["code"].as_str().unwrap_or(""),
                             d["message"].as_str().unwrap_or("")
                         );
+                        if let Some(action) = d["action"].as_str() {
+                            eprintln!("  Action: {action}");
+                        }
                     }
                 }
                 if o.incomplete {
                     eprintln!("incomplete: inspect diagnostics or commit durability");
                 }
             }
-            ExitCode::from(u8::from(o.incomplete))
+            ExitCode::from(
+                if o.incomplete && matches!(cli.command, Some(Command::Doctor)) {
+                    5
+                } else {
+                    u8::from(o.incomplete)
+                },
+            )
         }
         Err(e) => {
             let code = match e.code.as_str() {

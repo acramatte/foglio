@@ -1,4 +1,5 @@
 //! Linux local-filesystem Markdown domain with a disposable search index.
+mod coordination;
 pub mod events;
 pub mod filesystem;
 pub mod frontmatter;

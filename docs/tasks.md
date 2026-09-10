@@ -1,6 +1,6 @@
 # Implementation tasks
 
-**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, P4-01–P4-04, P5-01–P5-04, and P6-01–P6-03 verified locally; hosted CI for Phases 1–6 pending. Phase 7 remains open.** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
+**Status: Phase 0 verified locally and in hosted CI. P1-01–P1-07, P2-01–P2-04, P3-01–P3-03, P4-01–P4-04, P5-01–P5-04, and P6-01–P6-03 verified locally; hosted CI for Phases 1–6 pending. P7-01 and local automated P7-02 are verified; P7-03 measurements and P7-04 staged Debian smoke are available. Phase 7/v1 release qualification remains open. [Evidence and blockers](phase7.md).** Dependencies are prerequisite task IDs. Each row is a bounded work item, not an instruction to scaffold future phases. Proposed decisions must be resolved at their named gate.
 
 ## Completion protocol
 
@@ -162,14 +162,27 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 | Status | ID | Dependencies | Work / files | Acceptance |
 |---|---|---|---|---|
-| [ ] | P7-01 | P6-03 | Implement full read-only `doctor`, safe explicit repairs, actionable CLI/UI diagnostics | Read-only run leaves bytes unchanged; malformed YAML, access errors, schema corruption, stale/orphans found; no source rewriting (V14) |
-| [ ] | P7-02 | P6-03 | Keyboard shortcuts, focus/accessibility, fast navigation/search, empty/error polish; command palette only if justified | Keyboard-only create/find/edit/move workflow; focus and screen-reader labels checked; no new product scope (V26) |
+| [x] | P7-01 | P6-03 | Implement full read-only `doctor`, safe explicit repairs, actionable CLI/UI diagnostics | Read-only run leaves bytes unchanged; malformed YAML, access errors, schema corruption, stale/orphans found; no source rewriting (V14) |
+| [x] | P7-02 | P6-03 | Keyboard shortcuts, focus/accessibility, fast navigation/search, empty/error polish; command palette only if justified | Keyboard-only create/find/edit/move workflow; focus and screen-reader labels checked; no new product scope (V26) |
 | [ ] | P7-03 | P6-03 | Benchmark 1k/50k corpora, warm/cold behavior and watcher convergence; finish platform fault/security matrix | Reproducible distributions meet agreed budgets or limitations block target claim; no fabricated timing or untested OS promises (V07, V15, V19, V25) |
 | [ ] | P7-04 | P7-01, P7-02, P7-03 | Package chosen OS targets; install smoke, README/help, `docs/sync.md`, recovery/limitations docs; final v1 acceptance | Fresh install and complete release workflow pass, including actual external-tool transfer to another device and DB deletion/rebuild; all required evidence linked (V24, V26, V27) |
 
+### Phase 7 local gate and remaining release work
+
+- **Scope:** user authorized local Linux hardening; measure first, then agree budgets. Actual second-device transfer explicitly blocked.
+- **P7-01:** read-only core/CLI doctor, actionable diagnostics, existing explicit reindex repair. Source/cache bytes and absent-state noncreation verified; no automatic source repair.
+- **P7-02:** native keyboard-only onboarding/create/find/edit/move, modal focus/help, result/filter focus and small-height scroll regression pass; 66 frontend tests. DOM labels are verified, not actual screen-reader/physical-display qualification.
+- **P7-03:** fixed 1k/50k raw distributions/environment and robustness checks are complete. Initial quadratic rebuild failure retained; bulk-clear order fixed and retested. [Benchmark report](phase7-benchmarks.md). Numeric budgets remain undecided; full public search is substantially slower than prepared queries.
+- **P7-04:** `.deb` with CLI/desktop built and extracted payload exercised through Phase 4/5/6/7 native tests plus cache deletion/rebuild and manifest preservation. Fresh same-host Ubuntu 26.04 container package-manager install/dependency resolution, unprivileged native suites and uninstall/source preservation also pass (`phase7-install-verified.log`); no second-device or independent-OS claim.
+- **Tests:** workspace formatting/tests/strict Clippy; current CLI acceptance 12+4; 66 frontend tests and typecheck/build; packaged native Phase 4, 10 Phase 5 scenarios, 9 Phase 6 scenarios and keyboard workflow. [Full evidence](phase7.md).
+- [ ] Agree performance budgets using actual public-API and watcher distributions; qualify large-corpus UI latency/memory and physical-cold behavior. Do not close P7-03 based on prepared queries alone.
+- [ ] Qualify physical-display/assistive-technology behavior on an independently installed target OS; same-host fresh container package-manager install/uninstall passed without removing fixture libraries.
+- [ ] Execute the actual external-tool second-device transfer, conflict-copy and derived-reconstruction release scenario; explicitly blocked by user choice for now.
+- [ ] Run and verify hosted CI after an authorized push. No commit/push/release was made here.
+
 ### P7-02 contention follow-up
 
-- [ ] Coordinate same-process watcher scans and desktop mutations to reduce spurious `busy` outcomes without weakening bounded external-process locks, stale revision checks or committed-outcome semantics. Phase 6 native regression observed safe retained-buffer failures requiring explicit Retry save; navigation acceptance exercises this recovery. Regress concurrent watcher/lifecycle/navigation activity before claiming contention-free UX.
+- [x] Coordinate same-process watcher scans and desktop mutations to reduce spurious `busy` outcomes without weakening bounded external-process locks, stale revision checks or committed-outcome semantics. Phase 6 native regression observed safe retained-buffer failures requiring explicit Retry save; navigation acceptance exercises this recovery. Regress concurrent watcher/lifecycle/navigation activity before claiming contention-free UX. Shared-handle coordination now waits at most two seconds, preserves immediate external-process lock failure and rejects reentry. Deterministic shared-handle/separate-handle tests and packaged watcher/navigation/close regressions pass. Long scans may still produce explicit Busy; no contention-free claim.
 
 ## Deferred search UX
 
