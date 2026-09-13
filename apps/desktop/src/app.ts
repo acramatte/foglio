@@ -27,6 +27,40 @@ type DialogField = {
   required?: boolean;
   testid?: string;
 };
+type Shortcut = {
+  keys: ReadonlyArray<ReadonlyArray<string>>;
+  description: string;
+};
+// "Mod" is the platform's primary accelerator: Command on macOS, Ctrl elsewhere.
+const MODIFIER = "Mod";
+export function primaryModifier(): string {
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  return /mac/i.test(nav.userAgentData?.platform || nav.platform || nav.userAgent) ? "⌘" : "Ctrl";
+}
+const SHORTCUTS: ReadonlyArray<{ title: string; items: ReadonlyArray<Shortcut> }> = [
+  { title: "Write", items: [
+    { keys: [[MODIFIER, "N"]], description: "Create a note" },
+    { keys: [[MODIFIER, "S"]], description: "Save the note now. Typing already saves on its own." },
+  ]},
+  { title: "Read", items: [
+    { keys: [[MODIFIER, "E"]], description: "Switch between Source and Preview" },
+  ]},
+  { title: "Find a note", items: [
+    { keys: [[MODIFIER, "F"]], description: "Focus library search (literal words; current filters apply)" },
+    { keys: [["↓"]], description: "From the search box, step into the results" },
+  ]},
+  { title: "Move through results", items: [
+    { keys: [["↑"], ["↓"]], description: "Previous or next result" },
+    { keys: [["Home"], ["End"]], description: "First or last result" },
+    { keys: [["Enter"], ["Space"]], description: "Open the focused note" },
+    { keys: [["Escape"]], description: "Leave the results and return to search" },
+  ]},
+  { title: "In dialogs", items: [
+    { keys: [["Enter"]], description: "Apply the dialog" },
+    { keys: [["Escape"]], description: "Cancel and stay where you were" },
+    { keys: [["Tab"], ["Shift", "Tab"]], description: "Reach every control, including Move / rename" },
+  ]},
+];
 export class App {
   private editor: Editor | null = null;
   private busy = false;
@@ -209,7 +243,7 @@ export class App {
     help.dataset.testid="keyboard-help";help.type="button";
     help.addEventListener("click",()=>{
       if (this.busy || this.selecting || this.host.querySelector("dialog[open]")) return;
-      void this.dialog("Keyboard shortcuts", "Ctrl+N: create a note. Ctrl+F: focus library search (literal words; current filters apply). Arrow Down from search: focus results. Up/Down or Home/End: navigate results; Enter or Space: open. Escape in results: return to search. Ctrl+E: switch source/preview. Ctrl+S: save. Tab/Shift+Tab: reach all controls, including Move / rename. Enter: apply a dialog; Escape: cancel. On macOS use Command instead of Ctrl.");
+      this.help();
     });
     footer.append(
       help,
@@ -726,6 +760,42 @@ export class App {
     this.busy=true;this.renderEditor();
     try {await this.api.close();} catch(error) {this.report(error);this.busy=false;this.renderEditor();}
   }
+  private help(): void {
+    const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
+    const dialog=element("dialog",undefined,"shortcuts-dialog");dialog.dataset.testid="shortcuts-dialog";
+    const form=element("form");form.method="dialog";
+    const heading=element("h2","Keyboard shortcuts");heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
+    const modifier=primaryModifier();
+    const description=element("p",modifier==="⌘" ? "Keys use ⌘ (Command). Every action has a button too; keys are only faster." : "Every action has a button too; keys are only faster.");
+    description.id="dialog-detail";dialog.setAttribute("aria-describedby",description.id);
+    const shortcuts=element("div",undefined,"shortcuts");
+    for (const group of SHORTCUTS) {
+      const section=element("section",undefined,"shortcut-group");
+      const rows=element("ul");
+      for (const shortcut of group.items) {
+        const row=element("li");
+        const cells=element("span",undefined,"shortcut-keys");
+        shortcut.keys.forEach((combo,index)=>{
+          if (index) cells.append(element("span","or","shortcut-separator"));
+          const keys=element("span",undefined,"shortcut-combo");
+          combo.forEach((key,position)=>{
+            if (position) keys.append(element("span","+","shortcut-plus"));
+            keys.append(element("kbd",key===MODIFIER ? modifier : key));
+          });
+          cells.append(keys);
+        });
+        row.append(cells,element("span",shortcut.description,"shortcut-description"));
+        rows.append(row);
+      }
+      section.append(element("h3",group.title),rows);shortcuts.append(section);
+    }
+    const close=element("button","Close");close.type="button";close.dataset.testid="dialog-cancel";
+    const finish=()=>{dialog.close();dialog.remove();if (origin?.isConnected) origin.focus();};
+    close.addEventListener("click",finish);
+    dialog.addEventListener("cancel",event=>{event.preventDefault();finish();});
+    form.append(heading,description,shortcuts,close);dialog.append(form);
+    this.host.append(dialog);dialog.showModal();close.focus();
+  }
   private dialog(title: string, detail: string, fields?: DialogField[], destructive: boolean | string = false): Promise<string[] | null> {
     return new Promise(resolve=>{
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
@@ -744,7 +814,8 @@ export class App {
         }
         form.append(label,control);return control;
       });
-      const cancel=element("button",controls.length || destructive ? "Cancel" : "Stay here");cancel.type="button";cancel.dataset.testid="dialog-cancel";
+      // An informational dialog's only button just dismisses the message; a choice dialog's cancels an operation.
+      const cancel=element("button",controls.length || destructive ? "Cancel" : "Close");cancel.type="button";cancel.dataset.testid="dialog-cancel";
       const finish=(value:string[]|null)=>{dialog.close();dialog.remove();if (origin?.isConnected) origin.focus();resolve(value);};
       cancel.addEventListener("click",()=>finish(null));form.append(cancel);
       if (controls.length || destructive) {const submit=element("button",typeof destructive === "string" ? destructive : destructive ? "Permanently delete" : "Apply");submit.type="submit";submit.dataset.testid="dialog-submit";form.append(submit);}

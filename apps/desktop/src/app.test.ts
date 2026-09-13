@@ -102,8 +102,40 @@ describe("Phase 7 keyboard and accessibility", () => {
   dialogs();const {host,api}=setup();await app.start();await app.open("a.md");
   const help=get<HTMLButtonElement>(host,"keyboard-help");expect(help).not.toBeNull();help.focus();help.click();
   const dialog=host.querySelector("dialog")!;expect(dialog.getAttribute("aria-describedby")).toBe("dialog-detail");expect(dialog.textContent).toContain("Ctrl+F");
+  expect(dialog.classList.contains("shortcuts-dialog")).toBe(true);expect(dialog.querySelectorAll(".shortcut-group")).toHaveLength(5);
+  const rows=[...dialog.querySelectorAll<HTMLElement>(".shortcut-group li")];
+  expect(rows.length).toBeGreaterThan(10);
+  expect(rows.every(row=>row.querySelector("kbd") && row.querySelector(".shortcut-description"))).toBe(true);
+  expect(dialog.querySelectorAll(".shortcut-keys kbd").length).toBeGreaterThan(12);
+  expect(dialog.querySelector("button[data-testid=dialog-cancel]")?.textContent).toBe("Close");
   key("n");key("e");expect(host.querySelectorAll("dialog")).toHaveLength(1);expect(get<HTMLElement>(host,"preview").hidden).toBe(false);expect(api.create).not.toHaveBeenCalled();
   dialog.dispatchEvent(new Event("cancel",{cancelable:true}));expect(document.activeElement).toBe(help);
+ });
+ it("labels the lone dismiss button by what it does, and keeps Cancel on choice dialogs",async()=>{
+  dialogs();const {host}=setup();await app.start();await app.open("a.md");
+  get<HTMLButtonElement>(host,"keyboard-help").click();
+  expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Close");
+  expect(host.querySelector("[data-testid=dialog-submit]")).toBeNull();
+  host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
+  const move=get<HTMLButtonElement>(host,"move-note");move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Cancel");
+  expect(host.querySelector("[data-testid=dialog-submit]")!.textContent).toBe("Apply");
+ });
+ it("renders Command on macOS and Ctrl everywhere else",async()=>{
+  dialogs();const {host}=setup();await app.start();await app.open("a.md");
+  const original=Object.getOwnPropertyDescriptor(navigator,"platform");
+  const render=(platform:string)=>Object.defineProperty(navigator,"platform",{value:platform,configurable:true});
+  const open=()=>{get<HTMLButtonElement>(host,"keyboard-help").click();const dialog=host.querySelector("dialog")!;
+    const caps=[...dialog.querySelectorAll(".shortcut-keys kbd")].map(k=>k.textContent);return {dialog:host.querySelector("dialog")!,caps,detail:dialog.querySelector("#dialog-detail")!.textContent!};};
+  try {
+    Object.defineProperty(navigator,"platform",{value:"MacIntel",configurable:true});
+    const mac=open();
+    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(4);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
+    host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
+    render("Linux x86_64");
+    const linux=open();
+    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(4);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
+  } finally {if (original) Object.defineProperty(navigator,"platform",original);}
  });
  it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
   dialogs();const {host}=setup();await app.start();await app.open("a.md");get<HTMLButtonElement>(host,"source-mode").click();key("e");
@@ -258,7 +290,9 @@ describe("desktop UI state", () => {
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const {host,api}=setup({save:vi.fn().mockRejectedValue({code:"io",message:"denied"})});await app.start();await app.open("a.md");
   const source=host.querySelector<HTMLTextAreaElement>("textarea")!;source.value="retained";source.dispatchEvent(new Event("input"));
-  const navigation=app.open("b.md");await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLButtonElement>("[data-testid=dialog-cancel]")!.click();await navigation;
+  const navigation=app.open("b.md");await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Close");expect(host.querySelector("[data-testid=dialog-submit]")).toBeNull();
+  host.querySelector<HTMLButtonElement>("[data-testid=dialog-cancel]")!.click();await navigation;
   expect(api.open).not.toHaveBeenCalledWith(1,"b.md");expect(source.value).toBe("retained");
   const closing=app.requestClose();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());host.querySelector<HTMLButtonElement>("[data-testid=dialog-cancel]")!.click();await closing;expect(api.close).not.toHaveBeenCalled();expect(source.value).toBe("retained");
  });
