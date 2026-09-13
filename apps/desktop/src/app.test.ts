@@ -113,7 +113,7 @@ describe("Phase 7 keyboard and accessibility", () => {
  });
  it("labels the lone dismiss button by what it does, and keeps Cancel on choice dialogs",async()=>{
   dialogs();const {host}=setup();await app.start();await app.open("a.md");
-  get<HTMLButtonElement>(host,"keyboard-help").click();
+  host.querySelector<HTMLButtonElement>("[data-testid=keyboard-help]")!.click();
   expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Close");
   expect(host.querySelector("[data-testid=dialog-submit]")).toBeNull();
   host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
@@ -130,11 +130,11 @@ describe("Phase 7 keyboard and accessibility", () => {
   try {
     Object.defineProperty(navigator,"platform",{value:"MacIntel",configurable:true});
     const mac=open();
-    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(4);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
+    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(5);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
     host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
     render("Linux x86_64");
     const linux=open();
-    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(4);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
+    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(5);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
   } finally {if (original) Object.defineProperty(navigator,"platform",original);}
  });
  it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
@@ -188,6 +188,33 @@ describe("line-number gutter", () => {
   host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
   const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
   expect(source.wrap).toBe("off");
+ });
+ it("toggles line numbers with Ctrl+L and keeps the state across mode switches",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const gutter=host.querySelector<HTMLElement>("[data-testid=line-gutter]")!;
+  expect(gutter.hidden).toBe(false);
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"l",ctrlKey:true,bubbles:true}));
+  expect(gutter.hidden).toBe(true);
+  // type while hidden: numbers keep updating but stay hidden
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="one\ntwo";
+  source.dispatchEvent(new Event("input",{bubbles:true}));
+  expect(gutter.hidden).toBe(true);
+  expect(gutter.querySelectorAll(".line-number")).toHaveLength(2);
+  // switch to preview and back: the hidden state persists
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  expect(gutter.hidden).toBe(true);
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"l",ctrlKey:true,bubbles:true}));
+  expect(gutter.hidden).toBe(false);
+  expect(gutter.querySelectorAll(".line-number")).toHaveLength(2);
+ });
+ it("lists the line-number toggle in the keyboard shortcuts dialog",async()=>{
+  const {host}=setup();await app.start();
+  host.querySelector<HTMLButtonElement>("[data-testid=keyboard-help]")!.click();
+  const dialog=host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Ctrl+L");
  });
  it("hides with the source editor and shows nothing for the preview pane",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
