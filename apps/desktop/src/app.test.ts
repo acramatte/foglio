@@ -170,6 +170,25 @@ describe("Phase 7 keyboard and accessibility", () => {
   await vi.waitFor(()=>expect(api.search).toHaveBeenCalledTimes(2));expect(api.search).toHaveBeenLastCalledWith(1,"literal words",null,null);
  });
 });
+describe("line-number gutter", () => {
+ it("renders one number per source line and refreshes on typing",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  const gutter=host.querySelector<HTMLElement>("[data-testid=line-gutter]")!;
+  expect(gutter).not.toBeNull();
+  expect(gutter.querySelectorAll(".line-number")).toHaveLength(1); // "a.md" body is a single line
+  source.value="one\ntwo\nthree";
+  source.dispatchEvent(new Event("input",{bubbles:true}));
+  expect(gutter.querySelectorAll(".line-number")).toHaveLength(3);
+  expect(gutter.lastElementChild!.textContent).toBe("3");
+ });
+ it("hides with the source editor and shows nothing for the preview pane",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  expect(host.querySelector<HTMLElement>("[data-testid=line-gutter]")!.parentElement!.hidden).toBe(true);
+ });
+});
 describe("desktop UI state", () => {
  it("toggles source and preview from either mode with the keyboard shortcut",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
