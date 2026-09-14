@@ -86,6 +86,49 @@ describe("Phase 6 conflict choices",()=>{
   pending.resolve({...note("copy.md","local"),revision:"copy"});await vi.waitFor(()=>expect(source.readOnly).toBe(false));
  });
 });
+describe("Source edit shortcuts", () => {
+ it("restores exact mixed newlines after saving an edit, undo and redo", async () => {
+  const original="a\r\nb\nc\r\n";
+  let disk={...note("a.md",original),revision:"r0"};
+  const {host,api}=setup({open:vi.fn(async()=>disk),save:vi.fn(async(session,path,_revision,body)=>{
+   disk={...disk,body,revision:disk.revision+"x"};return {session,path,revision:disk.revision,file_committed:true,warnings:[]};
+  })});
+  await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("textarea")!;
+  source.setSelectionRange(2,4);
+  source.dispatchEvent(new InputEvent("beforeinput",{inputType:"deleteContentBackward"}));
+  source.value="a\nc\n";source.dispatchEvent(new InputEvent("input",{inputType:"deleteContentBackward"}));
+  await vi.waitFor(()=>expect(host.querySelector<HTMLElement>("[data-testid=save-status]")!.dataset.state).toBe("clean"));
+  const edited=disk.body;
+  source.dispatchEvent(new KeyboardEvent("keydown",{key:"z",ctrlKey:true,bubbles:true,cancelable:true}));
+  await vi.waitFor(()=>expect(disk.body).toBe(original));
+  source.dispatchEvent(new KeyboardEvent("keydown",{key:"z",ctrlKey:true,shiftKey:true,bubbles:true,cancelable:true}));
+  await vi.waitFor(()=>expect(disk.body).toBe(edited));
+  expect(api.save).toHaveBeenCalledTimes(3);
+ });
+ it.each(["Linux", "Win32", "MacIntel"])("routes %s shortcuts only in the source", async platform => {
+  vi.spyOn(navigator, "platform", "get").mockReturnValue(platform);
+  try {
+   const {host}=setup();await app.start();await app.open("a.md");
+   host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+   const source=host.querySelector<HTMLTextAreaElement>("textarea")!;
+   const mac=platform==="MacIntel";
+   const key=(target:HTMLElement, key:string, extra:KeyboardEventInit={})=>{
+    const event=new KeyboardEvent("keydown",{key,ctrlKey:!mac,metaKey:mac,bubbles:true,cancelable:true,...extra});
+    target.dispatchEvent(event);return event.defaultPrevented;
+   };
+   source.dispatchEvent(new InputEvent("beforeinput",{inputType:"insertText"}));
+   source.value="edited";source.dispatchEvent(new InputEvent("input",{inputType:"insertText"}));
+   expect(key(source,"z")).toBe(true);expect(source.value).toBe("a.md");
+   expect(key(source,"Z",{shiftKey:true})).toBe(true);expect(source.value).toBe("edited");
+   key(source,"z");expect(key(source,"y")).toBe(!mac);expect(source.value).toBe(mac ? "a.md" : "edited");
+   for (const extra of [{altKey:true},{isComposing:true},{ctrlKey:mac,metaKey:!mac},{ctrlKey:true,metaKey:true}]) expect(key(source,"z",extra)).toBe(false);
+   expect(key(host.querySelector<HTMLInputElement>("[data-testid=search-input]")!,"z")).toBe(false);
+   source.readOnly=true;expect(key(source,"z")).toBe(false);
+  } finally { vi.restoreAllMocks(); }
+ });
+});
 describe("Phase 7 keyboard and accessibility", () => {
  const key=(key:string, extra:KeyboardEventInit={})=>document.activeElement!.dispatchEvent(new KeyboardEvent("keydown",{key,ctrlKey:true,bubbles:true,cancelable:true,...extra}));
  const get=<T extends HTMLElement>(host:HTMLElement,id:string)=>host.querySelector<T>(`[data-testid=${id}]`)!;
