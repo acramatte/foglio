@@ -384,9 +384,17 @@ footer button {
   .count { padding-bottom: 8px; }
 }
 [hidden] { display: none !important; }
-.editor-tools, .conflict-tools { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
-.editor-tools button, .conflict-tools button, .new-note, dialog button { border: 1px solid #d4d8ce; border-radius: 5px; padding: 7px 10px; background: #f1f3ed; color: inherit; }
+.editor-tools, .conflict-tools, .format-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
+.format-bar { padding-top: 0; }
+.format-bar[hidden] { display: none !important; }
+.editor-tools button, .conflict-tools button, .format-bar button, .new-note, dialog button { border: 1px solid #d4d8ce; border-radius: 5px; padding: 7px 10px; background: #f1f3ed; color: inherit; }
 .editor-tools button[aria-pressed="true"] { background: #dfe7db; }
+.format-bar button { min-width: 2.2em; }
+.format-bar button[data-testid="format-bold"] { font-weight: 700; }
+.format-bar button[data-testid="format-italic"] { font-style: italic; }
+.format-bar button[data-testid="format-strike"] { text-decoration: line-through; }
+.format-bar button[data-testid="format-code"],
+.format-bar button[data-testid="format-fence"] { font-family: ui-monospace, monospace; }
 .new-note { margin: 14px 18px 0; }
 .save-status { padding: 3px 24px 10px; font-size: 12px; color: #365c49; }
 .save-error { white-space: pre-wrap; padding: 12px 24px; background: #fff0df; color: #8b3c24; }

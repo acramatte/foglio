@@ -85,4 +85,11 @@ describe("SourceHistory", () => {
     expect(source.value).toBe("edited");expect(changed).not.toHaveBeenCalled();
     source.readOnly = false;history.apply(false);expect(source.value).toBe("original");
   });
+  it("records a programmatic replacement as one undo step", () => {
+    const {source, history} = setup("hello");
+    history.replace("**hello**", 0, 9, () => {});
+    expect(source.value).toBe("**hello**");
+    history.apply(false);expect(source.value).toBe("hello");
+    history.apply(true);expect(source.value).toBe("**hello**");
+  });
 });
