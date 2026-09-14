@@ -9,7 +9,7 @@ function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promi
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
 function setup(overrides:Partial<Api> = {}) {
- const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
+ const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),appearance:vi.fn().mockResolvedValue("system"),setAppearance:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
 describe("Phase 6 conflict choices",()=>{
@@ -186,6 +186,13 @@ describe("Phase 7 keyboard and accessibility", () => {
   const move=get<HTMLButtonElement>(host,"move-note");move.focus();move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
   expect(document.activeElement).toBe(get(host,"operation-value"));host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
   await vi.waitFor(()=>expect(move.disabled).toBe(false));expect(document.activeElement).toBe(move);
+ });
+ it("opens overflow actions when keyboard focus reaches More",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  const overflow=host.querySelector<HTMLDetailsElement>(".document-overflow")!;
+  const more=overflow.querySelector<HTMLElement>("summary")!;
+  expect(overflow.open).toBe(false);more.focus();
+  expect(overflow.open).toBe(true);expect(get<HTMLButtonElement>(host,"move-note").disabled).toBe(false);
  });
  it("keeps filter focus and offers an actionable empty-results reset",async()=>{
   const {host}=setup();await app.start();const filter=[...host.querySelectorAll<HTMLButtonElement>("nav button")].find(b=>b.textContent==="empty")!;filter.focus();filter.click();
@@ -600,5 +607,31 @@ describe("desktop UI state", () => {
  it("routes user-activated links only through controlled commands", async() => {
   const {host,api}=setup({open:async(_s,path)=>note(path,"[Web](https://example.org) [Note](other.md)")});await app.start();await app.open("a.md");
   const anchors=host.querySelectorAll<HTMLAnchorElement>("article a");anchors[0]!.click();expect(api.external).toHaveBeenCalledWith("https://example.org");anchors[1]!.click();expect(api.resolve).toHaveBeenCalledWith(1,"a.md","other.md");
+ });
+ it("changes appearance without recreating the active source editor", async() => {
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const {host,api}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="retained source";source.setSelectionRange(2,8);source.dispatchEvent(new Event("input"));
+  host.querySelector<HTMLButtonElement>("[data-testid=appearance-settings]")!.click();
+  const select=host.querySelector<HTMLSelectElement>("[data-testid=appearance-preference]")!;select.value="dark";
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.setAppearance).toHaveBeenCalledWith("dark"));
+  expect(document.documentElement.dataset.appearance).toBe("dark");expect(source.value).toBe("retained source");expect(source.selectionStart).toBe(2);expect(source.selectionEnd).toBe(8);expect(source.hidden).toBe(false);
+ });
+ it("focus mode hides only navigation panes and restores them", async() => {
+  const {host}=setup();await app.start();await app.open("a.md");
+  const focus=host.querySelector<HTMLButtonElement>("[data-testid=focus-mode]")!;focus.click();
+  const workspace=host.querySelector<HTMLElement>(".workspace")!;expect(workspace.classList.contains("focus-mode")).toBe(true);expect(focus.textContent).toBe("Exit focus");
+  focus.click();expect(workspace.classList.contains("focus-mode")).toBe(false);expect(focus.textContent).toBe("Focus");
+ });
+ it("follows supported system appearance changes only while System is selected", async() => {
+  const original=Object.getOwnPropertyDescriptor(window,"matchMedia");let listener:((event:MediaQueryListEvent)=>void)|undefined;const media={matches:false,addEventListener:(_type:string, next:(event:MediaQueryListEvent)=>void)=>{listener=next;},removeEventListener:()=>{}};
+  Object.defineProperty(window,"matchMedia",{value:()=>media,configurable:true});
+  try {
+   const {host,api}=setup();await app.start();expect(document.documentElement.dataset.appearance).toBe("light");media.matches=true;listener?.({} as MediaQueryListEvent);expect(document.documentElement.dataset.appearance).toBe("dark");
+   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};host.querySelector<HTMLButtonElement>("[data-testid=appearance-settings]")!.click();host.querySelector<HTMLSelectElement>("[data-testid=appearance-preference]")!.value="light";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));await vi.waitFor(()=>expect(api.setAppearance).toHaveBeenCalledWith("light"));media.matches=true;listener?.({} as MediaQueryListEvent);expect(document.documentElement.dataset.appearance).toBe("light");
+  } finally { if (original) Object.defineProperty(window,"matchMedia",original); else delete (window as {matchMedia?: unknown}).matchMedia; }
  });
 });
