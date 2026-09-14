@@ -187,6 +187,13 @@ describe("Phase 7 keyboard and accessibility", () => {
   expect(document.activeElement).toBe(get(host,"operation-value"));host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
   await vi.waitFor(()=>expect(move.disabled).toBe(false));expect(document.activeElement).toBe(move);
  });
+ it("opens overflow actions when keyboard focus reaches More",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  const overflow=host.querySelector<HTMLDetailsElement>(".document-overflow")!;
+  const more=overflow.querySelector<HTMLElement>("summary")!;
+  expect(overflow.open).toBe(false);more.focus();
+  expect(overflow.open).toBe(true);expect(get<HTMLButtonElement>(host,"move-note").disabled).toBe(false);
+ });
  it("keeps filter focus and offers an actionable empty-results reset",async()=>{
   const {host}=setup();await app.start();const filter=[...host.querySelectorAll<HTMLButtonElement>("nav button")].find(b=>b.textContent==="empty")!;filter.focus();filter.click();
   expect(document.activeElement?.textContent).toBe("empty");
