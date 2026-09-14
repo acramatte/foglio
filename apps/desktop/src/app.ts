@@ -90,6 +90,7 @@ export class App {
   private readonly gutter = element("div", undefined, "line-gutter");
   private readonly sourceWrap = element("div", undefined, "source-wrap");
   private readonly saveStatus = element("span", "", "save-status");
+  private readonly wordCount = element("span", "", "word-count");
   private readonly saveError = element("div", "", "save-error");
   private readonly tools = element("div", undefined, "editor-tools");
   private readonly formatBar = element("div", undefined, "format-bar");
@@ -259,11 +260,12 @@ export class App {
       event.preventDefault();
       this.sourceHistory.apply(command === "redo");
     });
-    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();});
+    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();this.updateWordCount();});
     // Record after the input handler updates the editor's lossless raw body.
     this.sourceHistory = new SourceHistory(this.source, body => {
       this.editor?.restoreBody(body);this.updateGutter();
     }, () => this.editor?.body ?? this.source.value);
+
     this.source.addEventListener("scroll",()=>{this.gutter.scrollTop=this.source.scrollTop;});
     this.gutter.dataset.testid="line-gutter";
     this.gutter.setAttribute("role","presentation");
@@ -280,6 +282,9 @@ export class App {
     }
     this.saveStatus.dataset.testid="save-status";
     this.saveStatus.setAttribute("role","status");
+    this.wordCount.dataset.testid="word-count";
+    this.wordCount.setAttribute("role","status");
+    this.wordCount.setAttribute("aria-label","Word count");
     this.saveError.dataset.testid="save-error";
     this.saveError.setAttribute("role","alert");
     this.retry.addEventListener("click",()=>{void this.editor?.retry();});
@@ -302,7 +307,7 @@ export class App {
     }
     this.previewScroll.append(this.preview);
     this.sourceWrap.append(this.gutter, this.source);
-    reader.append(this.metadata, this.tools, this.formatBar, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll);
+    reader.append(this.metadata, this.tools, this.formatBar, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll, this.wordCount);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -812,10 +817,11 @@ export class App {
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
     this.sourceWrap.hidden=this.source.hidden;
     this.formatBar.hidden=this.source.hidden;
-    this.updateGutter();
+    this.updateGutter();this.updateWordCount();
     this.preview.hidden=!!editor && this.mode!=="preview";
     this.previewScroll.hidden=this.preview.hidden;
     this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
+    this.wordCount.hidden=!editor;
     this.retry.hidden=editor?.status!=="save_error";
     this.source.readOnly=this.busy;
     this.retry.disabled=this.busy;
@@ -853,6 +859,14 @@ export class App {
   private toggleLineNumbers(): void {
     this.lineNumbers = !this.lineNumbers;
     this.gutter.hidden = !this.lineNumbers;
+  }
+  // Live word count for the current note. English-style whitespace word
+  // splitting: any run of non-whitespace is a word. Updated on keystroke and
+  // on every render (note load, external sync, mode switch).
+  private updateWordCount(): void {
+    const text = this.editor ? this.editor.body : "";
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    this.wordCount.textContent = words === 1 ? "1 word" : `${words} words`;
   }
   // Line-number gutter: one number per line of the source buffer. Refreshes on
   // every render (note load, mode switch, external sync) and on each keystroke.

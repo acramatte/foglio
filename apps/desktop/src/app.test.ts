@@ -363,6 +363,32 @@ describe("source formatting bar", () => {
   expect(source.value).toBe("hello");
  });
 });
+describe("word count", () => {
+ it("shows the word count for the opened note and updates live while typing",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const wordCount=host.querySelector<HTMLElement>("[data-testid=word-count]")!;
+  expect(wordCount).not.toBeNull();
+  expect(wordCount.hidden).toBe(false);
+  expect(wordCount.textContent).toBe("1 word"); // "a.md" body is a single word
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="one two three four";
+  source.dispatchEvent(new Event("input",{bubbles:true}));
+  expect(wordCount.textContent).toBe("4 words");
+  source.value="   ";
+  source.dispatchEvent(new Event("input",{bubbles:true}));
+  expect(wordCount.textContent).toBe("0 words");
+ });
+ it("hides when no note is open and survives mode switches",async()=>{
+  const {host}=setup();await app.start();
+  const wordCount=host.querySelector<HTMLElement>("[data-testid=word-count]")!;
+  expect(wordCount.hidden).toBe(true);
+  await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  expect(wordCount.hidden).toBe(false);
+  expect(wordCount.textContent).toBe("1 word");
+ });
+});
 describe("desktop UI state", () => {
  it("toggles source and preview from either mode with the keyboard shortcut",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
