@@ -44,6 +44,7 @@ const SHORTCUTS: ReadonlyArray<{ title: string; items: ReadonlyArray<Shortcut> }
   ]},
   { title: "Read", items: [
     { keys: [[MODIFIER, "E"]], description: "Switch between Source and Preview" },
+    { keys: [[MODIFIER, "L"]], description: "Show or hide line numbers in the source editor" },
   ]},
   { title: "Find a note", items: [
     { keys: [[MODIFIER, "F"]], description: "Focus library search (literal words; current filters apply)" },
@@ -66,6 +67,7 @@ export class App {
   private busy = false;
   private pendingRefresh = false;
   private mode: "source" | "preview" = "preview";
+  private lineNumbers = true;
   private readonly source = element("textarea", undefined, "source");
   private readonly gutter = element("div", undefined, "line-gutter");
   private readonly sourceWrap = element("div", undefined, "source-wrap");
@@ -115,6 +117,10 @@ export class App {
     if (event.key.toLowerCase() === "e") {
       event.preventDefault();
       this.setMode(this.mode === "source" ? "preview" : "source");
+    }
+    if (event.key.toLowerCase() === "l") {
+      event.preventDefault();
+      this.toggleLineNumbers();
     }
     if (event.key.toLowerCase() === "n") {
       event.preventDefault();
@@ -754,6 +760,12 @@ export class App {
     this.saveError.textContent=[editor.message,editor.warning].filter(Boolean).join("\n");
     this.preview.innerHTML=renderMarkdown(editor.body);
     if (!editor.body.trim()) this.preview.append(element("p","This note is empty. Switch to Source to start writing."));
+  }
+  // Vim-style line-number visibility toggle (Ctrl/Cmd+L). Session state for
+  // now; a future config layer will hydrate and persist this flag.
+  private toggleLineNumbers(): void {
+    this.lineNumbers = !this.lineNumbers;
+    this.gutter.hidden = !this.lineNumbers;
   }
   // Line-number gutter: one number per line of the source buffer. Refreshes on
   // every render (note load, mode switch, external sync) and on each keystroke.
