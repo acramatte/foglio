@@ -1,0 +1,47 @@
+# Release-note generation for the tag-triggered release pipeline.
+#
+# Commits follow the Conventional Commits format, so the release notes are
+# derived from history instead of being written by hand: `git-cliff` groups the
+# commits of the released range by type and links each one to its commit and,
+# when it can resolve one, its pull request.
+#
+# Local use (pinned in mise.toml): `mise exec -- git-cliff --unreleased`
+# CI use: the pinned git-cliff-action in .github/workflows/release.yml.
+
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}{{ commit.message | upper_first }}{% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/pull/{{ commit.remote.pr_number }})){% endif %} ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/{{ remote.github.owner }}/{{ remote.github.repo }}/commit/{{ commit.id }}))
+{% endfor %}\
+{% endfor %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+# Keep everything that is not a conventional commit rather than dropping it
+# silently, but do drop the noise described below.
+filter_unconventional = false
+filter_commits = false
+split_commits = false
+tag_pattern = "v[0-9]*"
+sort_commits = "oldest"
+
+commit_parsers = [
+  # Pull request merge commits duplicate the commits they carry, and their body
+  # is the whole squashed message.
+  { message = "^Merge ", skip = true },
+  # Version bumps are bookkeeping; the release title already carries the version.
+  { message = "^chore", skip = true },
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^refactor", group = "Refactoring" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^ci", group = "CI and build" },
+  { message = "^.*", group = "Other changes" },
+]

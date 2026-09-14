@@ -78,19 +78,32 @@ jobs:
           find target -path '*bundle/dmg/*.dmg' -exec cp {} dist/ \;
           find target -path '*/release/foglio-notes-v*.tar.gz' -exec cp {} dist/ \;
           ls -l dist/
+      - name: Generate the changes section
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          # Same version as the mise pin, so local and CI output match.
+          version: v2.14.1
+          config: cliff.toml
+          args: --unreleased --github-repo ${{ github.repository }} --output ${{ runner.temp }}/release-changes.md
+        env:
+          # Authenticates the pull request lookups; unauthenticated ones are rate limited.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Create GitHub release with artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          # Include commit subjects since the previous release above the shared details.
-          notes=$(mktemp)
+          # Changes since the previous release come from cliff.toml, above the
+          # shared platform, artifact and verification details.
           previous_tag=$(git describe --tags --abbrev=0 "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          changes="${{ runner.temp }}/release-changes.md"
+          notes=$(mktemp)
           {
             echo "## Changes since ${previous_tag:-the previous release}"
             echo
-            if [ -n "$previous_tag" ]; then
-              git log --no-merges --format='- %s' "$previous_tag..$GITHUB_REF_NAME"
+            if [ -s "$changes" ]; then
+              # The template opens with blank lines; drop them above the heading.
+              awk 'NF { emit = 1 } emit' "$changes"
             else
               echo "- Initial release"
             fi
