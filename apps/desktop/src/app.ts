@@ -308,6 +308,10 @@ export class App {
     }
     const overflow=element("details",undefined,"document-overflow");
     const summary=element("summary","More");summary.setAttribute("aria-label","More note actions");
+    // A closed <details> excludes its actions from sequential keyboard focus.
+    // Open it as keyboard focus reaches the summary so Move and Delete remain
+    // reachable without requiring a pointer click first.
+    summary.addEventListener("focus",()=>{overflow.open=true;});
     overflow.append(summary);
     for (const [action,label] of [["move","Move / rename"],["delete","Delete note"]] as const) {
       const button=element("button",label);button.dataset.testid=action+"-note";
