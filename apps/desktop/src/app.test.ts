@@ -130,11 +130,11 @@ describe("Phase 7 keyboard and accessibility", () => {
   try {
     Object.defineProperty(navigator,"platform",{value:"MacIntel",configurable:true});
     const mac=open();
-    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(5);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
+    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(6);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
     host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
     render("Linux x86_64");
     const linux=open();
-    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(5);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
+    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(6);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
   } finally {if (original) Object.defineProperty(navigator,"platform",original);}
  });
  it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
@@ -220,6 +220,42 @@ describe("line-number gutter", () => {
   const {host}=setup();await app.start();await app.open("a.md");
   host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
   expect(host.querySelector<HTMLElement>("[data-testid=line-gutter]")!.parentElement!.hidden).toBe(true);
+ });
+});
+describe("markdown link hotkey", () => {
+ it("turns a selected URL into a Markdown link with Ctrl+K",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="see https://example.org now";
+  source.setSelectionRange(4,23);
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"k",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("see [](https://example.org) now");
+  expect(source.selectionStart).toBe(5);
+  expect(source.selectionEnd).toBe(5);
+  expect(host.querySelector("[data-testid=save-status]")?.getAttribute("data-state")).toBe("dirty");
+ });
+ it("wraps selected text as [text]() and leaves preview mode untouched",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  source.value="see docs now";
+  source.setSelectionRange(4,8);
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"k",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("see docs now");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"k",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("see [docs]() now");
+  expect(source.selectionStart).toBe(11);
+  expect(source.selectionEnd).toBe(11);
+ });
+ it("lists the Markdown link shortcut in the keyboard shortcuts dialog",async()=>{
+  const {host}=setup();await app.start();
+  host.querySelector<HTMLButtonElement>("[data-testid=keyboard-help]")!.click();
+  const dialog=host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Ctrl+K");
+  expect(dialog.textContent).toContain("Turn the selection into a Markdown link");
  });
 });
 describe("desktop UI state", () => {

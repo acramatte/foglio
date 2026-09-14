@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from "vitest";
-import { renderMarkdown, classifyLink } from "./markdown";
+import { renderMarkdown, classifyLink, wrapMarkdownLink } from "./markdown";
 
 describe("safe Markdown", () => {
   it("renders GFM while preserving source and removing executable surfaces", () => {
@@ -26,5 +26,43 @@ describe("safe Markdown", () => {
   it("delegates relative parent links to the contained backend resolver", () => {
     expect(classifyLink("../second.md")).toEqual({kind:"note", target:"../second.md"});
     expect(classifyLink("other.md#heading")).toEqual({kind:"note", target:"other.md#heading"});
+  });
+});
+describe("wrapMarkdownLink", () => {
+  it("turns a selected URL into [title](url) and selects the empty title", () => {
+    expect(wrapMarkdownLink("see https://example.org now", 4, 23)).toEqual({
+      text: "see [](https://example.org) now",
+      selectionStart: 5,
+      selectionEnd: 5,
+    });
+  });
+  it("turns a selected note path into [title](path) the same way", () => {
+    expect(wrapMarkdownLink("see other.md now", 4, 12)).toEqual({
+      text: "see [](other.md) now",
+      selectionStart: 5,
+      selectionEnd: 5,
+    });
+  });
+  it("wraps ordinary selected text as [text](url) and selects the empty URL", () => {
+    expect(wrapMarkdownLink("see docs now", 4, 8)).toEqual({
+      text: "see [docs]() now",
+      selectionStart: 11,
+      selectionEnd: 11,
+    });
+  });
+  it("inserts an empty Markdown link at the caret when nothing is selected", () => {
+    expect(wrapMarkdownLink("ab", 1, 1)).toEqual({
+      text: "a[]()b",
+      selectionStart: 2,
+      selectionEnd: 2,
+    });
+  });
+  it("leaves an already-wrapped Markdown link unchanged", () => {
+    const source = "see [docs](https://example.org) now";
+    expect(wrapMarkdownLink(source, 4, 31)).toEqual({
+      text: source,
+      selectionStart: 4,
+      selectionEnd: 31,
+    });
   });
 });
