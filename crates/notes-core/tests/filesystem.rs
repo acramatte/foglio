@@ -167,6 +167,31 @@ fn staged_writer_child() {
     .unwrap();
 }
 
+// macOS attaches `com.apple.*` bookkeeping attributes to ordinary files inside
+// protected directories. Replacement must neither fail on them nor drop them.
+#[test]
+#[cfg(target_os = "macos")]
+fn macos_managed_attributes_survive_replacement() {
+    let tmp = tempfile::tempdir().unwrap();
+    let path = tmp.path().join("note.md");
+    fs::write(&path, b"old").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+    rustix::fs::setxattr(
+        &path,
+        "com.apple.provenance",
+        &[1],
+        rustix::fs::XattrFlags::empty(),
+    )
+    .unwrap();
+    store::save(&path, b"new", Some(&revision(b"old"))).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"new");
+    let mut value = [0u8; 8];
+    let size = rustix::fs::getxattr(&path, "com.apple.provenance", &mut value[..]).unwrap();
+    assert_eq!(&value[..size], &[1]);
+    assert_eq!(fs::metadata(&path).unwrap().mode() & 0o7777, 0o640);
+    assert_eq!(fs::read_dir(tmp.path()).unwrap().count(), 1);
+}
+
 #[test]
 fn killed_staged_writer_never_truncates_note() {
     let tmp = tempfile::tempdir().unwrap();

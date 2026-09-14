@@ -11,15 +11,56 @@ pub const MAX_NOTE_BYTES: usize = 16 * 1024 * 1024;
 
 // Only ordinary Unix mode-bit files are supported for replacement. Refuse
 // security metadata we cannot preserve instead of broadening effective access.
+/// macOS attaches `com.apple.*` attributes of its own accord inside protected
+/// directories such as `~/Documents`; they carry no access control, so they are
+/// carried over to the staged inode instead of failing the write. A bare
+/// `com.apple.*` name cannot exist on other platforms, where every extended
+/// attribute requires a namespace prefix, so the exemption is inert there.
+fn managed_attribute(name: &[u8]) -> bool {
+    name.starts_with(b"com.apple.")
+}
+/// First reported attribute that a replacement cannot reproduce, if any.
+fn unsupported_attribute(names: &[u8]) -> Option<&[u8]> {
+    names
+        .split(|byte| *byte == 0)
+        .find(|name| !name.is_empty() && !managed_attribute(name))
+}
+fn attribute_names(file: &File, buffer: &mut [u8]) -> Result<usize> {
+    rustix::fs::flistxattr(file, buffer).map_err(|e| Error::new(ErrorCode::Unsupported, e))
+}
 fn plain_security(file: &File) -> Result<()> {
     let mut attributes = [0u8; 65536];
-    let count = rustix::fs::flistxattr(file, &mut attributes[..])
-        .map_err(|e| Error::new(ErrorCode::Unsupported, e))?;
-    if count != 0 || file.metadata()?.mode() & 0o7000 != 0 {
+    let count = attribute_names(file, &mut attributes)?;
+    if unsupported_attribute(&attributes[..count]).is_some()
+        || file.metadata()?.mode() & 0o7000 != 0
+    {
         return Err(Error::new(
             ErrorCode::Unsupported,
             "ACLs, extended attributes and special mode bits are not supported for replacement",
         ));
+    }
+    Ok(())
+}
+/// Managed attributes belong to the reader — Finder tags and macOS bookkeeping
+/// live there — so a replacement publishes them on the staged inode. A copy we
+/// cannot reproduce refuses the write instead of dropping the attribute.
+fn carry_managed_attributes(source: &File, staged: &File) -> Result<()> {
+    let mut attributes = [0u8; 65536];
+    let count = attribute_names(source, &mut attributes)?;
+    for name in attributes[..count]
+        .split(|byte| *byte == 0)
+        .filter(|name| !name.is_empty() && managed_attribute(name))
+    {
+        let mut value = [0u8; 65536];
+        let size = rustix::fs::fgetxattr(source, name, &mut value[..])
+            .map_err(|e| Error::new(ErrorCode::Unsupported, e))?;
+        rustix::fs::fsetxattr(
+            staged,
+            name,
+            &value[..size],
+            rustix::fs::XattrFlags::empty(),
+        )
+        .map_err(|e| Error::new(ErrorCode::Unsupported, e))?;
     }
     Ok(())
 }
@@ -214,13 +255,18 @@ fn save_observed_with_security(
     let mode = original
         .as_ref()
         .map_or_else(|| fs::Permissions::from_mode(0o600), |m| m.permissions());
-    if check_security && original.is_some() {
+    // Hold the source inode so its managed attributes can be republished on the
+    // staged inode, and refuse unmanaged metadata before any bytes are written.
+    let source = if check_security && original.is_some() {
         let old = OpenOptions::new()
             .read(true)
             .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32)
             .open(path)?;
         plain_security(&old)?;
-    }
+        Some(old)
+    } else {
+        None
+    };
     let parent = path
         .parent()
         .ok_or_else(|| Error::new(ErrorCode::Path, "no parent"))?;
@@ -231,10 +277,12 @@ fn save_observed_with_security(
         .prefix(".foglio-stage-")
         .suffix(".tmp")
         .tempfile_in(parent)?;
-    // A newly-created file has no existing metadata to preserve. Its ACLs and
-    // xattrs are inherited from the parent by the filesystem, so checking the
-    // staging inode here would reject ordinary macOS directories.
-    if check_security && original.is_some() {
+    if let Some(source) = &source {
+        // A newly-created file has no existing metadata to preserve, so nothing
+        // is carried over when the note does not exist yet. Managed attributes
+        // follow the note; the fresh inode's own inherited attributes are not
+        // ours to judge, only unmanaged ones are refused.
+        carry_managed_attributes(source, temp.as_file())?;
         plain_security(temp.as_file())?;
     }
     if let Some(old) = &original {
@@ -370,4 +418,29 @@ pub fn lock(path: &Path) -> Result<LibraryLock> {
         )
     })?;
     Ok(LibraryLock(f, None))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{managed_attribute, unsupported_attribute};
+
+    #[test]
+    fn macos_bookkeeping_attributes_are_exempt_but_security_metadata_is_not() {
+        assert_eq!(
+            unsupported_attribute(b"com.apple.provenance\0com.apple.macl\0"),
+            None
+        );
+        assert_eq!(unsupported_attribute(b""), None);
+        assert_eq!(
+            unsupported_attribute(b"com.apple.provenance\0user.posix\0"),
+            Some(&b"user.posix"[..])
+        );
+        assert_eq!(
+            unsupported_attribute(b"system.posix_acl_access\0"),
+            Some(&b"system.posix_acl_access"[..])
+        );
+        assert!(managed_attribute(b"com.apple.FinderInfo"));
+        assert!(!managed_attribute(b"user.com.apple.tags"));
+        assert!(!managed_attribute(b"security.selinux"));
+    }
 }

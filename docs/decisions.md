@@ -56,7 +56,7 @@ The user explicitly requested Phase 1 and approved the proposed defaults before 
 | D15 | `--library`, `--json`, `id:`/`path:` selectors; permanent deletion needs `--yes` or terminal confirmation | Stable envelope/exit codes and real executable/PTY tests; code 5 reserved for later doctor |
 | D20 | No undo/history; confirmed permanent deletion of one note | Stale confirmation and deletion tests; empty directories preserved |
 | D23 | Current request authorizes Phase 1 only, after completed Phase 0 | Stop after P1-07; no Phase 2+ scaffolding |
-| D24 | Refuse replacements with ACLs/xattrs/special mode bits or changed owner/group; cap complete notes at 16 MiB | Do not silently broaden access or commit notes the reader cannot reopen; actual ACL/group/size tests |
+| D24 | Refuse replacements with unmanaged ACLs/xattrs/special mode bits or changed owner/group; carry macOS-managed `com.apple.*` attributes onto the staged inode; cap complete notes at 16 MiB | Do not silently broaden access or drop reader metadata; actual ACL/group/size tests plus attribute-classification tests |
 
 ## Accepted Phase 2 decisions
 

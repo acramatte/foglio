@@ -53,7 +53,7 @@ To run the desktop app from source, install the [native prerequisites](docs/phas
 
 **Status: Phases 1–6 and the local-hardening slice of Phase 7 are implemented and verified locally on Linux x86_64.** This includes diagnostics, keyboard/focus hardening, reproducible 1k/50k-note measurements, and Debian packaging. The v1 release gate remains open: hosted CI, agreed performance budgets, large-library UI behavior, physical-display/assistive-technology qualification, and an actual second-device transfer still need evidence. See [Phase 7 evidence and open release gates](docs/phase7.md).
 
-The documented file-safety qualification currently covers Linux local filesystems. Foglio deliberately refuses risky replacements involving symlinks, hard links, ownership changes, and ACL/xattr-bearing targets. Cooperative locking cannot prevent arbitrary external-writer or hostile ancestor-swap races. Read the [filesystem safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before relying on it.
+The documented file-safety qualification currently covers Linux local filesystems. Foglio deliberately refuses risky replacements involving symlinks, hard links, ownership changes, and ACL/xattr-bearing targets; macOS-managed `com.apple.*` attributes are carried over to the replacement so ordinary Documents/Desktop libraries keep saving. Cooperative locking cannot prevent arbitrary external-writer or hostile ancestor-swap races. Read the [filesystem safety boundary](docs/phase1.md#s02-filesystem-guarantees-and-limits) before relying on it.
 
 ## Build and test
 
