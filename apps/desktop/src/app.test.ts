@@ -195,11 +195,26 @@ describe("Phase 7 keyboard and accessibility", () => {
   expect(overflow.open).toBe(true);expect(get<HTMLButtonElement>(host,"move-note").disabled).toBe(false);
  });
  it("keeps filter focus and offers an actionable empty-results reset",async()=>{
-  const {host}=setup();await app.start();const filter=[...host.querySelectorAll<HTMLButtonElement>("nav button")].find(b=>b.textContent==="empty")!;filter.focus();filter.click();
-  expect(document.activeElement?.textContent).toBe("empty");
+  const {host}=setup();await app.start();const filter=host.querySelector<HTMLButtonElement>('[data-filter-key="folder:empty"]')!;filter.focus();filter.click();
+  expect(document.activeElement?.getAttribute("data-filter-key")).toBe("folder:empty");
   await vi.waitFor(()=>expect(get(host,"clear-filters")).not.toBeNull());get<HTMLButtonElement>(host,"clear-filters").click();
   await vi.waitFor(()=>expect(host.querySelectorAll(".note-card")).toHaveLength(2));expect(document.activeElement).toBe(get(host,"search-input"));
   expect(host.querySelector(".count")?.getAttribute("role")).toBe("status");expect(host.querySelector("nav")?.getAttribute("aria-label")).toBe("Library filters");
+ });
+ it("shows recursive note counts for All notes and folders, but not tags", async () => {
+  const counted: Browse = {...browse, notes:[
+   {path:"root.md",title:"Root",tags:["work"]},
+   {path:"blog/post.md",title:"Post",tags:["work"]},
+   {path:"blog/drafts/idea.md",title:"Idea",tags:[]},
+   {path:"tests/case.md",title:"Case",tags:[]},
+  ],folders:["blog","blog/drafts","empty","tests"]};
+  const {host}=setup({browse:vi.fn().mockResolvedValue(counted)});await app.start();
+  const filter=(key:string)=>host.querySelector<HTMLElement>(`[data-filter-key="${key}"]`)!;
+  const count=(key:string)=>filter(key).querySelector(".filter-count")?.textContent;
+  expect(filter("all").querySelector(".filter-label")?.textContent).toBe("All notes");
+  expect(count("all")).toBe("4");expect(count("folder:blog")).toBe("2");
+  expect(count("folder:blog/drafts")).toBe("1");expect(count("folder:empty")).toBe("0");expect(count("folder:tests")).toBe("1");
+  expect(filter("tag:work").querySelector(".filter-count")).toBeNull();
  });
  it("disables navigation through a mutation acknowledgement, including refreshed cards",async()=>{
   dialogs();const pending=deferred<Awaited<ReturnType<Api["delete"]>>>();
@@ -453,6 +468,20 @@ describe("desktop UI state", () => {
   input.value="System designs";
   host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
   await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"System designs",null,"",[]));
+ });
+ it("uses fresh browse counts when a creation races the watcher generation",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  const updated: Browse={...browse,generation:2,notes:[...browse.notes,{path:"new.md",title:"New",tags:[]}]};
+  const {host,api}=setup({
+   browse:vi.fn().mockResolvedValueOnce(browse).mockResolvedValue(updated),
+   create:vi.fn().mockResolvedValue({session:1,path:"new.md",revision:"r1",file_committed:true,warnings:[]}),
+   open:vi.fn(async(_session,path)=>note(path)),
+  });
+  await app.start();expect(host.querySelector('[data-filter-key="all"] .filter-count')?.textContent).toBe("2");
+  host.querySelector<HTMLButtonElement>("[data-testid=new-note]")!.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  host.querySelector<HTMLInputElement>("[data-testid=operation-value]")!.value="New";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(host.querySelector('[data-filter-key="all"] .filter-count')?.textContent).toBe("3"));
+  expect(api.browse).toHaveBeenCalledTimes(2);
  });
  it("derives a portable filename when the optional folder is blank",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};

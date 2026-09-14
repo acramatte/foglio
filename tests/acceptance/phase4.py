@@ -164,6 +164,7 @@ tags: [work]
                 assert "Empty" in browse["value"]["folders"], "physical empty folder missing"
                 assert {n["path"] for n in browse["value"]["notes"]} == {"Projects/first.md", "second.md", "plain.md"}
                 assert not browse["value"]["incomplete"]
+                assert driver.js("return document.querySelector('[data-filter-key=\"all\"] .filter-count').textContent === '3' && document.querySelector('[data-filter-key=\"folder:Projects\"] .filter-count').textContent === '1' && document.querySelector('[data-filter-key=\"folder:Empty\"] .filter-count').textContent === '0' && !document.querySelector('[data-filter-key=\"tag:work\"] .filter-count')"), "sidebar note counts"
                 assert driver.invoke("open_note", {"session": session, "path": "plain.md"})["ok"]
                 assert driver.js("return !document.querySelector('header .status') && document.querySelector('footer .status').textContent === 'Monitoring external changes'")
                 driver.js("Array.from(document.querySelectorAll('[data-testid=note-list] button')).find(e=>e.textContent.includes('Native preview')).click()")
@@ -172,12 +173,12 @@ tags: [work]
                 assert not requests, f"preview made remote requests: {requests}"
                 driver.js("Array.from(document.querySelectorAll('[data-testid=preview] a')).find(e=>e.textContent==='Second').click()")
                 wait(lambda: driver.js("return document.querySelector('[data-testid=preview]').textContent.includes('UniqueSearchTerm')"), "contained parent note link")
-                driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='# work').click()")
+                driver.js("document.querySelector('[data-filter-key=\"tag:work\"]').click()")
                 wait(lambda: driver.js("return !document.querySelector('[data-testid=note-list]').textContent.includes('Second note')"), "tag filter")
-                driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='All notes').click()")
-                driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='Empty').click()")
+                driver.js("document.querySelector('[data-filter-key=\"all\"]').click()")
+                driver.js("document.querySelector('[data-filter-key=\"folder:Empty\"]').click()")
                 wait(lambda: driver.js("return document.querySelector('[data-testid=note-list]').textContent.includes('No matching notes')"), "empty physical folder filter")
-                driver.js("Array.from(document.querySelectorAll('nav button')).find(e=>e.textContent==='All notes').click()")
+                driver.js("document.querySelector('[data-filter-key=\"all\"]').click()")
                 driver.js("document.querySelector('[data-note-path=\"Projects/first.md\"]').click()")
                 wait(lambda: driver.js("return !!document.querySelector('[data-testid=preview] table')"), "return to original note")
                 assert not driver.invoke("resolve_note_link", {"session": session, "fromPath": "Projects/first.md", "target": "../../outside.md"})["ok"]

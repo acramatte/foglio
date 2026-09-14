@@ -147,6 +147,7 @@ def main():
                 js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'e',ctrlKey:true,bubbles:true}))")
                 assert js("return document.querySelector('textarea').hidden && !document.querySelector('article').hidden")
                 operation('new-note','Sprite','blog');wait(lambda:(library/'blog/Sprite.md').exists(),'created nested file')
+                wait(lambda:js("return document.querySelector('[data-filter-key=\"all\"] .filter-count')?.textContent === '48' && document.querySelector('[data-filter-key=\"folder:blog\"] .filter-count')?.textContent === '1'"),'created note updates sidebar counts')
                 wait(lambda:js("return document.querySelector('.metadata').textContent.includes('blog/Sprite.md')"),'created path selected')
                 edit('# Created\nBody from desktop\n');wait(saved,'new note autosave')
                 created=library/'blog/Sprite.md';assert created.read_text()=='# Created\nBody from desktop\n'
