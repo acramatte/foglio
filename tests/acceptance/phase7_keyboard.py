@@ -35,10 +35,14 @@ def main():
         driver = Driver(f'http://127.0.0.1:{dport}')
         js = driver.js
 
-        def keys(text, control=False):
+        def keys(text, control=False, shift=False):
             actions = [{'type': 'keyDown', 'value': CTRL}] if control else []
+            if shift:
+                actions.append({'type': 'keyDown', 'value': '\ue008'})
             for char in text:
                 actions.extend([{'type': 'keyDown', 'value': char}, {'type': 'keyUp', 'value': char}])
+            if shift:
+                actions.append({'type': 'keyUp', 'value': '\ue008'})
             if control:
                 actions.append({'type': 'keyUp', 'value': CTRL})
             driver.request('POST', f'/session/{driver.session}/actions', {
@@ -92,6 +96,24 @@ def main():
                 await_save()
                 assert created.read_text() == 'keyboardneedle body'
 
+                keys('z', control=True)
+                wait(lambda: js("return document.querySelector('textarea').value!=='keyboardneedle body'"), 'native undo after save')
+                undone = js("return document.querySelector('textarea').value")
+                await_save()
+                assert created.read_text() == undone
+                keys('z', control=True, shift=True)
+                wait(lambda: js("return document.querySelector('textarea').value==='keyboardneedle body'"), 'native redo after save')
+                await_save()
+                assert created.read_text() == 'keyboardneedle body'
+                keys('z', control=True)
+                wait(lambda: js("return document.querySelector('textarea').value===arguments[0]", undone), 'second undo')
+                keys('e', control=True)
+                keys('e', control=True)
+                keys('y', control=True)
+                wait(lambda: js("return document.querySelector('textarea').value==='keyboardneedle body'"), 'Ctrl+Y redo across mode switch')
+                await_save()
+                assert created.read_text() == 'keyboardneedle body'
+
                 keys('f', control=True)
                 assert focused('[aria-label="Search notes"]')
                 keys('keyboardneedle')
@@ -104,11 +126,13 @@ def main():
                 assert focused('[aria-label="Note preview"]')
                 keys('e', control=True)
                 assert focused('[aria-label="Markdown source (body only)"]')
+                keys('z', control=True)
+                assert js("return document.querySelector('textarea').value==='keyboardneedle body'"), {'check': 'reopening resets history', 'source': js("return document.querySelector('textarea').value"), 'focus': js('return document.activeElement.outerHTML')}
                 keys('a', control=True)
                 keys('keyboardneedle edited')
                 keys('s', control=True)
                 await_save()
-                assert created.read_text() == 'keyboardneedle edited'
+                assert created.read_text() == 'keyboardneedle edited', {'disk': created.read_text(), 'source': js("return document.querySelector('textarea').value"), 'focus': js('return document.activeElement.outerHTML')}
 
                 tab_to('[data-testid=move-note]')
                 keys(ENTER)
@@ -136,7 +160,7 @@ def main():
                 keys(ESCAPE)
                 assert focused('[data-testid=keyboard-help]')
                 assert moved.read_bytes() == b'keyboardneedle edited'
-                print(json.dumps({'binary': str(BINARY.resolve()), 'passed': ['keyboard-only onboarding/create/find/edit/move', 'native dialog Escape and focus restoration', 'help discoverability and modal shortcut isolation', 'accessible labels and exact saved/moved bytes']}))
+                print(json.dumps({'binary': str(BINARY.resolve()), 'passed': ['keyboard-only onboarding/create/find/edit/move', 'native dialog Escape and focus restoration', 'help discoverability and modal shortcut isolation', 'native keyboard undo/redo, autosave, mode-switch history and reopen isolation', 'accessible labels and exact saved/moved bytes']}))
             except Exception:
                 log.flush()
                 log.seek(0)

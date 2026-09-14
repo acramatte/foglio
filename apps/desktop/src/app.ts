@@ -8,6 +8,7 @@ import {
 } from "./api";
 import { classifyLink, renderMarkdown, wrapMarkdownLink } from "./markdown";
 import { Editor } from "./editor";
+import { SourceHistory } from "./source-history";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -70,6 +71,7 @@ export class App {
   private mode: "source" | "preview" = "preview";
   private lineNumbers = true;
   private readonly source = element("textarea", undefined, "source");
+  private readonly sourceHistory: SourceHistory;
   private readonly gutter = element("div", undefined, "line-gutter");
   private readonly sourceWrap = element("div", undefined, "source-wrap");
   private readonly saveStatus = element("span", "", "save-status");
@@ -224,7 +226,22 @@ export class App {
     this.source.setAttribute("aria-label", "Markdown source (body only)");
     this.source.wrap="off";
     this.source.spellcheck=false;
+    this.source.addEventListener("keydown", event => {
+      if (event.defaultPrevented || event.isComposing || event.altKey || this.source.readOnly) return;
+      const mac = primaryModifier() === "⌘";
+      if (mac ? !event.metaKey || event.ctrlKey : !event.ctrlKey || event.metaKey) return;
+      const key = event.key.toLowerCase();
+      const command = key === "z" ? (event.shiftKey ? "redo" : "undo")
+        : !mac && key === "y" && !event.shiftKey ? "redo" : null;
+      if (!command) return;
+      event.preventDefault();
+      this.sourceHistory.apply(command === "redo");
+    });
     this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();});
+    // Record after the input handler updates the editor's lossless raw body.
+    this.sourceHistory = new SourceHistory(this.source, body => {
+      this.editor?.restoreBody(body);this.updateGutter();
+    }, () => this.editor?.body ?? this.source.value);
     this.source.addEventListener("scroll",()=>{this.gutter.scrollTop=this.source.scrollTop;});
     this.gutter.dataset.testid="line-gutter";
     this.gutter.setAttribute("role","presentation");
@@ -668,7 +685,7 @@ export class App {
     const sourceScroll=this.source.scrollTop, previewScroll=this.previewScroll.scrollTop;
     this.editor?.dispose();this.note=note;this.selected=note.path;
     this.editor=new Editor(note,this.api.save,()=>this.renderEditor(),()=>this.api.open(note.session,note.path));
-    this.source.value=note.body;this.renderEditor();
+    this.source.value=note.body;this.sourceHistory.reset();this.renderEditor();
     this.metadata.replaceChildren(
       element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" ")),
       element("small","Body editing preserves frontmatter. Tags are managed separately."),
