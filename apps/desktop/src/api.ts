@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { AppearancePreference } from "./appearance";
 export interface DesktopState {
   session: number;
   root: string | null;
@@ -54,6 +55,8 @@ export interface Api {
   delete(session: number, path: string, revision: string): Promise<Mutation>;
   tag(session: number, path: string, revision: string, tag: string, add: boolean): Promise<Mutation>;
   close(): Promise<void>;
+  appearance(): Promise<AppearancePreference>;
+  setAppearance(preference: AppearancePreference): Promise<void>;
   state(): Promise<DesktopState>;
   select(path: string): Promise<DesktopState>;
   browse(session: number): Promise<Browse>;
@@ -79,6 +82,8 @@ export const api: Api = {
   delete: (session, path, revision) => invoke("delete_note", {session, path, revision}),
   tag: (session, path, revision, tag, add) => invoke("change_tag", {session, path, revision, tag, add}),
   close: () => invoke("finish_close"),
+  appearance: () => invoke("appearance_preference"),
+  setAppearance: (preference) => invoke("set_appearance_preference", { preference }),
   state: () => invoke("desktop_state"),
   select: (path) => invoke("select_library", { path }),
   browse: (session) => invoke("browse_library", { session }),

@@ -19,6 +19,14 @@ fn desktop_state(backend: State<'_, Arc<Backend>>) -> DesktopState {
     backend.state()
 }
 #[tauri::command]
+async fn appearance_preference() -> Result<AppearancePreference> {
+    blocking(super::appearance_preference).await
+}
+#[tauri::command]
+async fn set_appearance_preference(preference: AppearancePreference) -> Result<()> {
+    blocking(move || super::set_appearance_preference(preference)).await
+}
+#[tauri::command]
 async fn select_library(backend: State<'_, Arc<Backend>>, path: String) -> Result<DesktopState> {
     let backend = backend.inner().clone();
     blocking(move || backend.select(Path::new(&path))).await
@@ -194,6 +202,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             desktop_state,
+            appearance_preference,
+            set_appearance_preference,
             select_library,
             browse_library,
             search_notes,
