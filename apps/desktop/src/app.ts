@@ -260,13 +260,12 @@ export class App {
       event.preventDefault();
       this.sourceHistory.apply(command === "redo");
     });
-    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();this.updateWordCount();});
+    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();this.updateWordCount();this.fitSource();});
     // Record after the input handler updates the editor's lossless raw body.
     this.sourceHistory = new SourceHistory(this.source, body => {
-      this.editor?.restoreBody(body);this.updateGutter();
+      this.editor?.restoreBody(body);this.updateGutter();this.fitSource();
     }, () => this.editor?.body ?? this.source.value);
 
-    this.source.addEventListener("scroll",()=>{this.gutter.scrollTop=this.source.scrollTop;});
     this.gutter.dataset.testid="line-gutter";
     this.gutter.setAttribute("role","presentation");
     this.gutter.setAttribute("aria-hidden","true");
@@ -722,7 +721,7 @@ export class App {
   }
   private installNote(note: Note, preservePosition = false): void {
     const start=this.source.selectionStart, end=this.source.selectionEnd;
-    const sourceScroll=this.source.scrollTop, previewScroll=this.previewScroll.scrollTop;
+    const sourceScroll=this.sourceWrap.scrollTop, previewScroll=this.previewScroll.scrollTop;
     this.editor?.dispose();this.note=note;this.selected=note.path;
     this.editor=new Editor(note,this.api.save,()=>this.renderEditor(),()=>this.api.open(note.session,note.path));
     this.source.value=note.body;this.sourceHistory.reset();this.renderEditor();
@@ -731,7 +730,7 @@ export class App {
       element("small","Body editing preserves frontmatter. Tags are managed separately."),
     );
     if (preservePosition) this.source.setSelectionRange(start,end);
-    this.source.scrollTop=preservePosition ? sourceScroll : 0;
+    this.sourceWrap.scrollTop=preservePosition ? sourceScroll : 0;
     this.previewScroll.scrollTop=preservePosition ? previewScroll : 0;
   }
   private async diskSnapshot(editor: Editor): Promise<Note | null> {
@@ -817,7 +816,7 @@ export class App {
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
     this.sourceWrap.hidden=this.source.hidden;
     this.formatBar.hidden=this.source.hidden;
-    this.updateGutter();this.updateWordCount();
+    this.updateGutter();this.updateWordCount();this.fitSource();
     this.preview.hidden=!!editor && this.mode!=="preview";
     this.previewScroll.hidden=this.preview.hidden;
     this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
@@ -849,6 +848,7 @@ export class App {
       this.sourceHistory.replace(next.text, next.selectionStart, next.selectionEnd, () => {
         this.editor?.edit(this.source.value);
         this.updateGutter();
+        this.fitSource();
       });
     } else {
       this.source.setSelectionRange(next.selectionStart, next.selectionEnd);
@@ -870,7 +870,8 @@ export class App {
   }
   // Line-number gutter: one number per line of the source buffer. Refreshes on
   // every render (note load, mode switch, external sync) and on each keystroke.
-  // Scroll keeps the gutter pinned to the textarea's vertical position.
+  // The source wrapper owns scrolling; the gutter is a sibling of the opaque
+  // textarea so overflow never lives on the text itself.
   private updateGutter(): void {
     if (this.source.hidden) return;
     const lines = this.source.value.split("\n").length;
@@ -887,7 +888,17 @@ export class App {
       const nodes = this.gutter.children;
       for (let i = 0; i < nodes.length; i++) (nodes[i] as HTMLElement).textContent = String(i + 1);
     }
-    this.gutter.scrollTop = this.source.scrollTop;
+  }
+  // Grow the textarea to its content so overflow lives on .source-wrap, not on
+  // the text. field-sizing:content is preferred; this covers WebKitGTK without it.
+  // clientHeight excludes the top border while scrollHeight does not, so the
+  // fitted height must add the border back or the field stays 1px short.
+  private fitSource(): void {
+    if (this.source.hidden) return;
+    this.source.style.width="0";this.source.style.height="0";
+    const border=this.source.offsetHeight-this.source.clientHeight;
+    this.source.style.width=Math.max(this.source.scrollWidth, this.sourceWrap.clientWidth - this.gutter.offsetWidth)+"px";
+    this.source.style.height=Math.max(this.source.scrollHeight+border, this.sourceWrap.clientHeight)+"px";
   }
   get hasUnsavedChanges(): boolean {return !!this.editor?.pending || this.busy;}
   private async protect(): Promise<boolean> {

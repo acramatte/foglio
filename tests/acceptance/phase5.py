@@ -71,6 +71,7 @@ def main():
         (library/'missing.md').write_text('# Missing\n')
         (library/'mixed.md').write_bytes(b'A\r\nB\nC\r\nD')
         (library/'long.md').write_text('# Long note\n\n' + 'A paragraph that makes the preview scroll.\n\n' * 80)
+        (library/'wide.md').write_text('# Wide\n\n' + ('https://example.invalid/' + 'abcdefghijklmnopqrstuvwxyz' * 20) + '\n' + ('line\n' * 80))
         for i in range(40):
             (library/f'scroll-{i:02}.md').write_text(f'# Scroll note {i:02}\n')
         env = {key:os.environ[key] for key in ('PATH','LANG','LD_LIBRARY_PATH') if key in os.environ}
@@ -126,6 +127,11 @@ def main():
                 assert js("const p=document.querySelector('.preview-scroll');return p.scrollHeight>p.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
                 assert js("const p=document.querySelector('.preview-scroll');p.scrollTop=200;return p.scrollTop>0")
                 scenarios.append('long preview scroll stays inside the note pane')
+                open_note('wide.md')
+                click('[data-testid=source-mode]')
+                assert js("const w=document.querySelector('.source-wrap'), s=document.querySelector('[data-testid=source]');return w.scrollWidth>w.clientWidth && w.scrollHeight>w.clientHeight && s.scrollWidth<=s.clientWidth && s.scrollHeight<=s.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
+                assert js("const w=document.querySelector('.source-wrap');w.scrollLeft=40;w.scrollTop=80;return w.scrollLeft>0 && w.scrollTop>0")
+                scenarios.append('wide source scroll stays on the wrapper, not the textarea')
                 open_note('preserve.md')
                 click('[data-testid=source-mode]')
                 js("const e=document.querySelector('textarea');e.focus();const i=e.value.indexOf('untouched');e.setSelectionRange(i,i+'untouched'.length)")

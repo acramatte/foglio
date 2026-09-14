@@ -423,6 +423,20 @@ describe("desktop UI state", () => {
   expect(scroll.hidden).toBe(false);expect(scroll.scrollTop).toBe(120);
   await app.open("b.md");expect(scroll.scrollTop).toBe(0);
  });
+ it("owns source scrolling in a wrapper around opaque textarea content",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  const wrap=host.querySelector<HTMLElement>(".source-wrap")!;
+  const gutter=host.querySelector<HTMLElement>("[data-testid=line-gutter]")!;
+  expect(wrap).not.toBeNull();expect(source.parentElement).toBe(wrap);expect(gutter.parentElement).toBe(wrap);
+  wrap.scrollTop=80;
+  host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
+  expect(wrap.hidden).toBe(true);
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  expect(wrap.hidden).toBe(false);expect(wrap.scrollTop).toBe(80);
+  await app.open("b.md");expect(wrap.scrollTop).toBe(0);
+ });
  it("opens the new-note dialog with Ctrl+N",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
   const {host,api}=setup({create:vi.fn().mockResolvedValue({session:1,path:"System-designs.md",revision:"r1",file_committed:true,warnings:[]})});
