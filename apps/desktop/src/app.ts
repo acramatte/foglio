@@ -576,10 +576,11 @@ export class App {
     try {
       const browse = await this.api.browse(state.session);
       if (!this.valid(epoch, browse.session)) return;
-      if (browse.generation !== state.generation) {
-        this.state = { ...state, generation: -1 };
-        return;
-      }
+      // browse_library scans the current filesystem. If the watcher advanced
+      // between desktop_state and this call, its snapshot is newer than state;
+      // render it now instead of leaving navigation stale until the next poll.
+      if (browse.generation !== state.generation)
+        this.state = { ...state, generation: browse.generation };
       this.browse = browse;
       this.renderNavigation();
       this.renderDiagnostics();
@@ -610,21 +611,33 @@ export class App {
     const focused=this.host.ownerDocument.activeElement;
     const focusKey=nav.contains(focused) ? (focused as HTMLElement).dataset.filterKey : undefined;
     nav.replaceChildren();
-    const button = (key: string, text: string, active: boolean, action: () => void) => {
-      const b = element("button", text, active ? "filter active" : "filter");
+    const button = (key: string, text: string, active: boolean, action: () => void, count?: number) => {
+      const b = element("button", undefined, active ? "filter active" : "filter");
+      b.append(element("span", text, "filter-label"));
+      if (count !== undefined) b.append(element("span", String(count), "filter-count"));
       b.type = "button";
       b.dataset.filterKey=key;
       b.setAttribute("aria-pressed", String(active));
       b.addEventListener("click", action);
       return b;
     };
+    const notes = this.browse.notes;
+    const folderCounts = new Map(this.browse.folders.map((folder) => [folder, 0]));
+    for (const note of notes) {
+      const components = note.path.split("/");
+      components.pop();
+      for (let index = 1; index <= components.length; index++) {
+        const folder = components.slice(0, index).join("/");
+        folderCounts.set(folder, (folderCounts.get(folder) ?? 0) + 1);
+      }
+    }
     nav.append(
       button("all", "All notes", !this.folder && !this.tag, () => {
         this.folder = null;
         this.tag = null;
         this.renderNavigation();
         void this.loadList();
-      }),
+      }, notes.length),
       element("h3", "Folders"),
     );
     for (const path of this.browse!.folders) {
@@ -632,7 +645,7 @@ export class App {
         this.folder = this.folder === path ? null : path;
         this.renderNavigation();
         void this.loadList();
-      });
+      }, folderCounts.get(path) ?? 0);
       b.style.paddingLeft = `${12 + Math.min(path.split("/").length - 1, 5) * 12}px`;
       nav.append(b);
     }
