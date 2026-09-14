@@ -78,7 +78,12 @@ export class Editor {
     this.message=errorText(error);this.changed();
   }
   edit(value: string): void {
-    this.body=normalized(value)===normalized(this.savedBody) ? this.savedBody : preserveNewlines(this.body,value,this.newline);this.generation++;
+    this.restoreBody(normalized(value)===normalized(this.savedBody) ? this.savedBody : preserveNewlines(this.body,value,this.newline));
+  }
+  // History snapshots already contain exact raw newlines; do not reinterpret them
+  // as a fresh textarea edit against the latest autosaved body.
+  restoreBody(body: string): void {
+    this.body=body;this.generation++;
     if (this.status === "clean" || this.status === "dirty") this.status=this.body===this.savedBody ? "clean" : "dirty";
     this.schedule();this.changed();
   }
