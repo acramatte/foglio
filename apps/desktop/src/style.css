@@ -395,7 +395,6 @@ footer button {
 .line-gutter { flex: none; width: 3.5em; padding: 24px 0; overflow: hidden; font: 13px/1.8 ui-monospace, monospace; color: #8a9187; text-align: right; user-select: none; }
 .line-gutter[hidden] { display: none; }
 .line-number { height: 1.8em; padding-right: 12px; }
-.line-number:last-child { padding-right: 24px; }
 .source { flex: 1; min-height: 0; resize: none; border: 0; border-top: 1px solid #eeeee7; padding: 24px; font: 13px/1.8 ui-monospace, monospace; color: inherit; background: transparent; tab-size: 2; }
 .source:focus-visible { outline: 2px solid #3f7460; outline-offset: -2px; }
 dialog { color: inherit; background: #fffefb; border: 1px solid #d4d8ce; border-radius: 8px; max-width: 480px; padding: 24px; }
