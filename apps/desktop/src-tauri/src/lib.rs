@@ -5,9 +5,9 @@ use notes_core::{
     search::{SearchHit, SearchQuery},
     watcher::{Subscription, WatchOptions, Watcher},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -105,6 +105,67 @@ pub struct DesktopState {
     pub generation: u64,
     pub watcher_active: bool,
     pub error: Option<String>,
+}
+
+/// Stored desktop appearance stays independent from the shared CLI library
+/// selection. `System` is deliberately the default for an absent settings file.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AppearancePreference {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+fn appearance_path(state: &Path) -> PathBuf {
+    state.join("desktop-appearance.json")
+}
+
+pub fn appearance_preference_with_state(state: &Path) -> Result<AppearancePreference> {
+    let path = appearance_path(state);
+    match std::fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(AppearancePreference::System)
+        }
+        Err(error) => Err(err(error)),
+        Ok(_) => serde_json::from_slice(&notes_core::filesystem::read(&path).map_err(err)?)
+            .map_err(|_| "invalid desktop appearance preference".into()),
+    }
+}
+
+pub fn appearance_preference() -> Result<AppearancePreference> {
+    appearance_preference_with_state(&notes_core::library::config_dir().map_err(err)?)
+}
+
+pub fn set_appearance_preference_with_state(
+    state: &Path,
+    preference: AppearancePreference,
+) -> Result<()> {
+    let _settings =
+        notes_core::filesystem::lock(&state.join("desktop-appearance.lock")).map_err(err)?;
+    let path = appearance_path(state);
+    let bytes = serde_json::to_vec(&preference).map_err(err)?;
+    let expected = match std::fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(err(error)),
+        Ok(_) => Some(notes_core::revision(
+            &notes_core::filesystem::read(&path).map_err(err)?,
+        )),
+    };
+    let commit =
+        notes_core::filesystem::save_config(&path, &bytes, expected.as_ref()).map_err(err)?;
+    if !commit.durability_confirmed {
+        return Err("appearance preference saved but durability is not confirmed".into());
+    }
+    Ok(())
+}
+
+pub fn set_appearance_preference(preference: AppearancePreference) -> Result<()> {
+    set_appearance_preference_with_state(
+        &notes_core::library::config_dir().map_err(err)?,
+        preference,
+    )
 }
 #[derive(Serialize)]
 pub struct Browse {
