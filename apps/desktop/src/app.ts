@@ -211,6 +211,7 @@ export class App {
     );
     this.source.dataset.testid="source";
     this.source.setAttribute("aria-label", "Markdown source (body only)");
+    this.source.wrap="off";
     this.source.spellcheck=false;
     this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();});
     this.source.addEventListener("scroll",()=>{this.gutter.scrollTop=this.source.scrollTop;});

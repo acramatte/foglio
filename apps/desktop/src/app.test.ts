@@ -183,6 +183,12 @@ describe("line-number gutter", () => {
   expect(gutter.querySelectorAll(".line-number")).toHaveLength(3);
   expect(gutter.lastElementChild!.textContent).toBe("3");
  });
+ it("disables wrapping so a long line cannot skip the last number",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  expect(source.wrap).toBe("off");
+ });
  it("hides with the source editor and shows nothing for the preview pane",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
   host.querySelector<HTMLButtonElement>("[data-testid=preview-mode]")!.click();
