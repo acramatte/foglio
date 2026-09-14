@@ -67,6 +67,8 @@ export class App {
   private pendingRefresh = false;
   private mode: "source" | "preview" = "preview";
   private readonly source = element("textarea", undefined, "source");
+  private readonly gutter = element("div", undefined, "line-gutter");
+  private readonly sourceWrap = element("div", undefined, "source-wrap");
   private readonly saveStatus = element("span", "", "save-status");
   private readonly saveError = element("div", "", "save-error");
   private readonly tools = element("div", undefined, "editor-tools");
@@ -209,8 +211,13 @@ export class App {
     );
     this.source.dataset.testid="source";
     this.source.setAttribute("aria-label", "Markdown source (body only)");
+    this.source.wrap="off";
     this.source.spellcheck=false;
-    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);});
+    this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();});
+    this.source.addEventListener("scroll",()=>{this.gutter.scrollTop=this.source.scrollTop;});
+    this.gutter.dataset.testid="line-gutter";
+    this.gutter.setAttribute("role","presentation");
+    this.gutter.setAttribute("aria-hidden","true");
     for (const mode of ["source", "preview"] as const) {
       const button=element("button",mode === "source" ? "Source" : "Preview");
       button.dataset.testid=mode+"-mode";
@@ -231,7 +238,8 @@ export class App {
       button.addEventListener("click",()=>{void this.resolveConflict(action);});this.resolution.append(button);
     }
     this.previewScroll.append(this.preview);
-    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.resolution, this.source, this.previewScroll);
+    this.sourceWrap.append(this.gutter, this.source);
+    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -726,6 +734,8 @@ export class App {
     for (const b of this.host.querySelectorAll<HTMLButtonElement>(".note-card, [data-testid=new-note]")) b.disabled=this.busy || this.selecting;
     const editor=this.editor;
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
+    this.sourceWrap.hidden=this.source.hidden;
+    this.updateGutter();
     this.preview.hidden=!!editor && this.mode!=="preview";
     this.previewScroll.hidden=this.preview.hidden;
     this.saveStatus.hidden=!editor;this.saveError.hidden=!editor?.message && !editor?.warning;
@@ -744,6 +754,27 @@ export class App {
     this.saveError.textContent=[editor.message,editor.warning].filter(Boolean).join("\n");
     this.preview.innerHTML=renderMarkdown(editor.body);
     if (!editor.body.trim()) this.preview.append(element("p","This note is empty. Switch to Source to start writing."));
+  }
+  // Line-number gutter: one number per line of the source buffer. Refreshes on
+  // every render (note load, mode switch, external sync) and on each keystroke.
+  // Scroll keeps the gutter pinned to the textarea's vertical position.
+  private updateGutter(): void {
+    if (this.source.hidden) return;
+    const lines = this.source.value.split("\n").length;
+    if (this.gutter.childElementCount !== lines) {
+      this.gutter.textContent="";
+      const frag = this.host.ownerDocument.createDocumentFragment();
+      for (let i = 1; i <= lines; i++) {
+        const n = element("div", String(i), "line-number");
+        frag.append(n);
+      }
+      this.gutter.append(frag);
+    } else {
+      // Same count, but content may differ after external sync; rewrite text only.
+      const nodes = this.gutter.children;
+      for (let i = 0; i < nodes.length; i++) (nodes[i] as HTMLElement).textContent = String(i + 1);
+    }
+    this.gutter.scrollTop = this.source.scrollTop;
   }
   get hasUnsavedChanges(): boolean {return !!this.editor?.pending || this.busy;}
   private async protect(): Promise<boolean> {
