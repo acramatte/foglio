@@ -27,22 +27,23 @@ Source edits → revision-guarded autosave → atomic Markdown write → refresh
 
 ## Desktop
 
-Download the installer for your platform from [GitHub Releases](https://github.com/acramatte/foglio/releases). Current release `v0.1.1` includes:
+Download the installer for your platform from [GitHub Releases](https://github.com/acramatte/foglio/releases). Current release `v0.2.1` includes:
 
 | Platform | Download | SHA-256 |
 |---|---|---|
-| macOS (Apple Silicon) | [`Foglio_0.1.1_aarch64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_aarch64.dmg) | `ccc20877f663303e42abc40fb5cafa4bbc954ea21cfc49334cbb094e9814016e` |
-| macOS (Intel) | [`Foglio_0.1.1_x64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_x64.dmg) | `d063ef51228419f93ddd84ebcbb93a6c350d5ebcab5c0d58bd195e8c72a846ab` |
-| Debian/Ubuntu (x86_64) | [`Foglio_0.1.1_amd64.deb`](https://github.com/acramatte/foglio/releases/download/v0.1.1/Foglio_0.1.1_amd64.deb) | `bbf24be00f6dd60282fa6e0d6cf7c057feb50c0bf696e72f0333a3cf8a356655` |
+| macOS (Apple Silicon) | [`Foglio_0.2.1_aarch64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_aarch64.dmg) | `14bb2333e2e82befa74a8924e3012d0d17f28d14545774618b3d64bcaa06d4df` |
+| macOS (Intel) | [`Foglio_0.2.1_x64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_x64.dmg) | `65f86cbe0420c81e498b4c94a8fefbbc8cf2341442cacee9179a71e2366e5115` |
+| Debian/Ubuntu (x86_64) | [`Foglio_0.2.1_amd64.deb`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_amd64.deb) | `59b551d6d355ee0cb55d69087b23ec3700a3d63a8b06e1ef76941b8e3fb498cd` |
 
 Standalone `notes` CLI archives are also available:
 
 | Platform | Download | SHA-256 |
 |---|---|---|
-| macOS (Apple Silicon) | [`foglio-notes-v0.1.1-darwin-aarch64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.1.1/foglio-notes-v0.1.1-darwin-aarch64.tar.gz) | `fb20b6446a2c85464d73f311b63a7d21ea23b5b4399eda9e29a0313d14911dce` |
-| Linux (x86_64) | [`foglio-notes-v0.1.1-linux-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.1.1/foglio-notes-v0.1.1-linux-x86_64.tar.gz) | `c9e9371abf322081dc18672f0225737c4ca98100e18a189f5af0d367cf681546` |
+| macOS (Apple Silicon) | [`foglio-notes-v0.2.1-darwin-aarch64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-darwin-aarch64.tar.gz) | `720717f124fb431421c47b492e4ba98616309d285a51388e678ca5155e446eab` |
+| macOS (Intel) | [`foglio-notes-v0.2.1-darwin-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-darwin-x86_64.tar.gz) | `0db7f6a816c5f759a2b76b7f3060ff4a738d727a7efa6e28ad6d42327ee1beec` |
+| Linux (x86_64) | [`foglio-notes-v0.2.1-linux-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-linux-x86_64.tar.gz) | `453087f4fa5663575990452613873f8d542b99b24ac7809f198758ed25fa7ef3` |
 
-Verify a download before installing it, for example: `sha256sum Foglio_0.1.1_amd64.deb` on Linux or `shasum -a 256 Foglio_0.1.1_aarch64.dmg` on macOS.
+Verify a download before installing it, for example: `sha256sum Foglio_0.2.1_amd64.deb` on Linux or `shasum -a 256 Foglio_0.2.1_aarch64.dmg` on macOS.
 
 Enter an existing library path to browse folders, tags, and search results. Use **New note** and the **Source/Preview** controls to edit; Ctrl+E toggles the view and Ctrl+S flushes a save. Selection and `init` never modify Markdown. Paths identify documents, while hashes protect revisions. Existing `id` metadata is preserved as ordinary metadata. See the [identity contract](docs/path-identity.md) and [editing and recovery details](docs/phase6.md).
 
