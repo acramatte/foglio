@@ -10,6 +10,7 @@ import { classifyLink, renderMarkdown, wrapMarkdownLink } from "./markdown";
 import { Editor } from "./editor";
 import { SourceHistory } from "./source-history";
 import { applyFormat, type FormatAction } from "./format";
+import { appearanceLabel, resolveAppearance, type AppearancePreference } from "./appearance";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -113,6 +114,15 @@ export class App {
   private readonly error = element("div", "", "error");
   private readonly root = element("input");
   private readonly select = element("button", "Open library");
+  private readonly appearanceSettings = element("button", "Appearance", "appearance-settings");
+  private readonly focus = element("button", "Focus", "focus-action");
+  private readonly workspace = element("main", undefined, "workspace");
+  private appearance: AppearancePreference = "system";
+  private appearanceMedia: MediaQueryList | null = null;
+  private focusMode = false;
+  private readonly onAppearanceChange = (): void => {
+    if (this.appearance === "system") this.applyAppearance();
+  };
   private readonly search = element("input");
   private readonly navigation = element("nav");
   private readonly list = element("div", "", "note-list");
@@ -127,7 +137,9 @@ export class App {
     if (this.host.querySelector("dialog[open]")) return;
     if (!(event.ctrlKey || event.metaKey)) return;
     if (event.key.toLowerCase() === "f") {
-      event.preventDefault();this.search.focus();this.search.select();return;
+      event.preventDefault();
+      if (this.focusMode) this.setFocusMode(false);
+      this.search.focus();this.search.select();return;
     }
     if (this.busy || this.selecting || event.shiftKey) return;
     if (event.key.toLowerCase() === "s") {
@@ -163,12 +175,16 @@ export class App {
   ) {
     host.innerHTML = "";
     const header = element("header");
+    this.appearanceSettings.type = "button";
+    this.appearanceSettings.dataset.testid = "appearance-settings";
+    this.appearanceSettings.setAttribute("aria-haspopup", "dialog");
+    this.appearanceSettings.addEventListener("click", () => { void this.configureAppearance(); });
     header.append(
       element("strong", "foglio", "wordmark"),
-      element("span", "A quiet place for your notes", "strapline"),
+      this.appearanceSettings,
     );
     const form = element("form", undefined, "library-form");
-    const label = element("label", "Library folder");
+    const label = element("label", "Open library");
     this.root.id = "root-path";
     this.root.dataset.testid = "root-path";
     label.htmlFor = this.root.id;
@@ -193,9 +209,16 @@ export class App {
     });
     this.error.setAttribute("role", "alert");
     this.error.hidden = true;
-    const workspace = element("main", undefined, "workspace");
+    const workspace = this.workspace;
     const sidebar = element("aside", undefined, "sidebar");
-    sidebar.append(element("h2", "Library"), this.navigation);
+    const libraryToggle = element("button", "Library", "library-toggle");
+    libraryToggle.type = "button";
+    libraryToggle.dataset.testid = "library-toggle";
+    libraryToggle.addEventListener("click", () => {
+      form.hidden = !form.hidden;
+      if (!form.hidden) this.root.focus();
+    });
+    sidebar.append(libraryToggle, form, element("h2", "Browse"), this.navigation);
     const middle = element("section", undefined, "notes");
     middle.setAttribute("aria-label", "Notes");
     this.search.type = "search";
@@ -269,16 +292,30 @@ export class App {
     this.gutter.dataset.testid="line-gutter";
     this.gutter.setAttribute("role","presentation");
     this.gutter.setAttribute("aria-hidden","true");
+    const modeToggle = element("div", undefined, "mode-toggle");
+    modeToggle.setAttribute("role", "group");
+    modeToggle.setAttribute("aria-label", "Editor mode");
     for (const mode of ["source", "preview"] as const) {
       const button=element("button",mode === "source" ? "Source" : "Preview");
       button.dataset.testid=mode+"-mode";
       button.addEventListener("click",()=>this.setMode(mode));
-      this.tools.append(button);
+      modeToggle.append(button);
     }
-    for (const [action,label] of [["move","Move / rename"],["tag","Add tag"],["untag","Remove tag"],["delete","Delete note"]] as const) {
+    this.tools.append(modeToggle);
+    for (const [action,label] of [["tag","Add tag"],["untag","Remove tag"]] as const) {
       const button=element("button",label);button.dataset.testid=action+"-note";
       button.addEventListener("click",()=>{void this.mutate(action);});this.tools.append(button);
     }
+    const overflow=element("details",undefined,"document-overflow");
+    const summary=element("summary","More");summary.setAttribute("aria-label","More note actions");
+    overflow.append(summary);
+    for (const [action,label] of [["move","Move / rename"],["delete","Delete note"]] as const) {
+      const button=element("button",label);button.dataset.testid=action+"-note";
+      button.addEventListener("click",()=>{void this.mutate(action);});overflow.append(button);
+    }
+    this.focus.type="button";this.focus.dataset.testid="focus-mode";
+    this.focus.addEventListener("click",()=>this.setFocusMode(!this.focusMode));
+    this.tools.append(overflow,this.focus);
     this.saveStatus.dataset.testid="save-status";
     this.saveStatus.setAttribute("role","status");
     this.wordCount.dataset.testid="word-count";
@@ -306,7 +343,9 @@ export class App {
     }
     this.previewScroll.append(this.preview);
     this.sourceWrap.append(this.gutter, this.source);
-    reader.append(this.metadata, this.tools, this.formatBar, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll, this.wordCount);
+    const readerHeader=element("div",undefined,"reader-header");
+    readerHeader.append(this.metadata,this.tools);
+    reader.append(readerHeader, this.formatBar, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll, this.wordCount);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -322,11 +361,11 @@ export class App {
     });
     footer.append(
       help,
+      this.saveStatus,
       this.status,
     );
     host.append(
       header,
-      form,
       this.error,
       workspace,
       this.diagnostics,
@@ -337,7 +376,54 @@ export class App {
       "Choose an existing notes folder above to begin.",
     );
   }
+  private initializeAppearance(): Promise<void> {
+    if (typeof window.matchMedia === "function") {
+      this.appearanceMedia = window.matchMedia("(prefers-color-scheme: dark)");
+      this.appearanceMedia.addEventListener?.("change", this.onAppearanceChange);
+    }
+    this.applyAppearance();
+    return this.api.appearance().then(preference => {
+      this.appearance = preference;
+      this.applyAppearance();
+    });
+  }
+  private applyAppearance(): void {
+    const resolved = resolveAppearance(this.appearance, this.appearanceMedia);
+    const document = this.host.ownerDocument;
+    document.documentElement.dataset.appearance = resolved;
+    this.appearanceSettings.textContent = `Appearance: ${appearanceLabel(this.appearance)}`;
+    this.appearanceSettings.setAttribute("aria-label", `Appearance: ${appearanceLabel(this.appearance)} (${resolved})`);
+  }
+  private async configureAppearance(): Promise<void> {
+    if (this.busy || this.selecting) return;
+    const values = await this.dialog(
+      "Appearance",
+      "System follows your desktop setting. Light uses Sober; Dark uses the built-in Omarchy-inspired palette.",
+      [{ label: "Appearance", value: this.appearance, options: ["system", "light", "dark"], testid: "appearance-preference" }],
+    );
+    if (!values) return;
+    const preference = values[0] as AppearancePreference;
+    try {
+      await this.api.setAppearance(preference);
+      this.appearance = preference;
+      this.applyAppearance();
+    } catch (error) {
+      this.report(error);
+    }
+  }
+  private setFocusMode(enabled: boolean): void {
+    this.focusMode = enabled;
+    this.workspace.classList.toggle("focus-mode", enabled);
+    this.focus.textContent = enabled ? "Exit focus" : "Focus";
+    this.focus.setAttribute("aria-pressed", String(enabled));
+  }
   async start(): Promise<void> {
+    try {
+      await this.initializeAppearance();
+    } catch (error) {
+      // Theme settings must never block libraries or source editing.
+      this.report(error);
+    }
     await this.poll();
     if (!this.stopped)
       this.timer = setInterval(() => {
@@ -346,6 +432,7 @@ export class App {
   }
   stop(): void {
     this.stopped = true;
+    this.appearanceMedia?.removeEventListener?.("change", this.onAppearanceChange);
     this.host.ownerDocument.removeEventListener("keydown", this.onKeyDown);
     this.editor?.dispose();
     clearInterval(this.timer);
@@ -447,6 +534,15 @@ export class App {
       this.folder = null;
       this.search.value = "";
       this.root.value = state.root ?? "";
+      const libraryForm = this.host.querySelector<HTMLFormElement>(".library-form");
+      const libraryToggle = this.host.querySelector<HTMLButtonElement>("[data-testid=library-toggle]");
+      if (libraryForm) libraryForm.hidden = !!state.root;
+      if (libraryToggle) {
+        libraryToggle.textContent = state.root
+          ? `Library: ${state.root.split("/").filter(Boolean).pop() || state.root}`
+          : "Open library";
+        libraryToggle.title = state.root ?? "Open an existing local notes folder";
+      }
       this.navigation.replaceChildren();
       this.diagnostics.replaceChildren();
     }

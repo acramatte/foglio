@@ -1,4 +1,7 @@
-use notes_desktop::{Backend, external_url, relative_link};
+use notes_desktop::{
+    AppearancePreference, Backend, appearance_preference_with_state, external_url, relative_link,
+    set_appearance_preference_with_state,
+};
 use std::{
     fs,
     sync::{Arc, Barrier},
@@ -312,4 +315,27 @@ fn failed_selection_keeps_previous_session_and_configuration() {
     assert_eq!(backend.state().session, before.session);
     assert!(backend.state().watcher_active);
     assert_eq!(fs::read(state.join("config.json")).unwrap(), config);
+}
+
+#[test]
+fn desktop_appearance_defaults_to_system_and_preserves_cli_selection_config() {
+    let (_temp, root, state) = fixture();
+    let backend = Backend::new().unwrap();
+    backend.select_with_state(&root, &state).unwrap();
+    let selection = fs::read(state.join("config.json")).unwrap();
+    assert_eq!(
+        appearance_preference_with_state(&state).unwrap(),
+        AppearancePreference::System
+    );
+    set_appearance_preference_with_state(&state, AppearancePreference::Dark).unwrap();
+    assert_eq!(
+        appearance_preference_with_state(&state).unwrap(),
+        AppearancePreference::Dark
+    );
+    assert_eq!(fs::read(state.join("config.json")).unwrap(), selection);
+    assert_eq!(
+        fs::read_to_string(state.join("desktop-appearance.json")).unwrap(),
+        "\"dark\""
+    );
+    backend.shutdown();
 }
