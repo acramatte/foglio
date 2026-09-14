@@ -18,10 +18,13 @@ jobs:
         include:
           - name: Linux (deb + CLI tarball)
             runs-on: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
           - name: macOS arm64 (dmg + CLI tarball)
             runs-on: macos-latest
+            target: aarch64-apple-darwin
           - name: macOS x86_64 (dmg + CLI tarball)
             runs-on: macos-latest
+            target: x86_64-apple-darwin
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -43,17 +46,19 @@ jobs:
         env:
           # Tag-derived version, e.g. v0.1.2 -> 0.1.2; bundle names follow it.
           FOLGLIO_VERSION: ${{ github.ref_name }}
+          FOLGLIO_TARGET: ${{ matrix.target }}
         run: |
           export FOLGLIO_VERSION="${FOLGLIO_VERSION#v}"
           bash scripts/package-linux.sh
           bash scripts/package-release.sh
-      - name: Add macOS cross-compilation target
-        if: matrix.name == 'macOS x86_64 (dmg + CLI tarball)'
-        run: rustup target add x86_64-apple-darwin
+      - name: Add the cross-compilation target
+        if: runner.os == 'macOS'
+        run: rustup target add "${{ matrix.target }}"
       - name: Build macOS dmg and CLI tarball
         if: runner.os == 'macOS'
         env:
           FOLGLIO_VERSION: ${{ github.ref_name }}
+          FOLGLIO_TARGET: ${{ matrix.target }}
         run: |
           export FOLGLIO_VERSION="${FOLGLIO_VERSION#v}"
           cd apps/desktop
@@ -62,7 +67,7 @@ jobs:
           override="../../target/release-version.conf.json"
           mkdir -p ../../target
           printf '{"version": "%s"}\n' "$FOLGLIO_VERSION" > "$override"
-          npm run tauri -- build --bundles dmg --config "$override" ${{ matrix.name == 'macOS x86_64 (dmg + CLI tarball)' && '--target x86_64-apple-darwin' || '--target aarch64-apple-darwin' }} -- --locked
+          npm run tauri -- build --bundles dmg --config "$override" --target "${{ matrix.target }}" -- --locked
           cd ../..
           bash scripts/package-release.sh
       - name: Collect artifacts
@@ -71,7 +76,7 @@ jobs:
           mkdir -p dist
           find target -path '*bundle/deb/*.deb' -exec cp {} dist/ \;
           find target -path '*bundle/dmg/*.dmg' -exec cp {} dist/ \;
-          cp target/release/foglio-notes-v*-*.tar.gz dist/
+          find target -path '*/release/foglio-notes-v*.tar.gz' -exec cp {} dist/ \;
           ls -l dist/
       - name: Create GitHub release with artifacts
         env:
