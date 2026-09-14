@@ -6,7 +6,7 @@ import {
   errorText,
   errorCode,
 } from "./api";
-import { classifyLink, renderMarkdown } from "./markdown";
+import { classifyLink, renderMarkdown, wrapMarkdownLink } from "./markdown";
 import { Editor } from "./editor";
 
 function element<K extends keyof HTMLElementTagNameMap>(
@@ -41,6 +41,7 @@ const SHORTCUTS: ReadonlyArray<{ title: string; items: ReadonlyArray<Shortcut> }
   { title: "Write", items: [
     { keys: [[MODIFIER, "N"]], description: "Create a note" },
     { keys: [[MODIFIER, "S"]], description: "Save the note now. Typing already saves on its own." },
+    { keys: [[MODIFIER, "K"]], description: "Turn the selection into a Markdown link" },
   ]},
   { title: "Read", items: [
     { keys: [[MODIFIER, "E"]], description: "Switch between Source and Preview" },
@@ -125,6 +126,10 @@ export class App {
     if (event.key.toLowerCase() === "n") {
       event.preventDefault();
       void this.mutate("create");
+    }
+    if (event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      this.insertMarkdownLink();
     }
   };
   constructor(
@@ -760,6 +765,19 @@ export class App {
     this.saveError.textContent=[editor.message,editor.warning].filter(Boolean).join("\n");
     this.preview.innerHTML=renderMarkdown(editor.body);
     if (!editor.body.trim()) this.preview.append(element("p","This note is empty. Switch to Source to start writing."));
+  }
+  // Common markdown-editor binding (Ctrl/Cmd+K). Source mode only; preview
+  // keeps the buffer untouched so the key cannot rewrite a hidden textarea.
+  private insertMarkdownLink(): void {
+    if (this.mode !== "source" || !this.editor || this.source.readOnly) return;
+    const next = wrapMarkdownLink(this.source.value, this.source.selectionStart, this.source.selectionEnd);
+    this.source.focus();
+    if (next.text !== this.source.value) {
+      this.source.value = next.text;
+      this.editor.edit(this.source.value);
+      this.updateGutter();
+    }
+    this.source.setSelectionRange(next.selectionStart, next.selectionEnd);
   }
   // Vim-style line-number visibility toggle (Ctrl/Cmd+L). Session state for
   // now; a future config layer will hydrate and persist this flag.

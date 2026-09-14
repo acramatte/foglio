@@ -45,6 +45,32 @@ export function classifyLink(value: string): Link | null {
     return null;
   return { kind: "note", target: value };
 }
+export type WrappedLink = { text: string; selectionStart: number; selectionEnd: number };
+// Ctrl/Cmd+K: a classified URL or note path becomes [title](target) with the
+// caret in the empty title; any other selection becomes [text](url) with the
+// caret in the empty destination; a collapsed caret inserts []().
+export function wrapMarkdownLink(source: string, start: number, end: number): WrappedLink {
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
+  const selected = source.slice(from, to);
+  if (/^\[[^\]]*\]\([^)]*\)$/.test(selected)) {
+    return { text: source, selectionStart: from, selectionEnd: to };
+  }
+  let replacement: string;
+  let caret: number;
+  if (!selected || classifyLink(selected)) {
+    replacement = selected ? `[](${selected})` : "[]()";
+    caret = from + 1;
+  } else {
+    replacement = `[${selected}]()`;
+    caret = from + selected.length + 3;
+  }
+  return {
+    text: source.slice(0, from) + replacement + source.slice(to),
+    selectionStart: caret,
+    selectionEnd: caret,
+  };
+}
 const marked = new Marked({
   gfm: true,
   breaks: false,
