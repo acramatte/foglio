@@ -24,7 +24,6 @@ fn periodic_pass_repairs_real_edit_with_all_native_hints_dropped() {
         library: lib.clone(),
     };
     reconcile(&lib, &shared, None);
-    let old = shared.snapshot.lock().unwrap().notes[0].revision.clone();
     let (tx, rx) = mpsc::sync_channel(1);
     let state = shared.clone();
     let library = lib.clone();
@@ -48,18 +47,16 @@ fn periodic_pass_repairs_real_edit_with_all_native_hints_dropped() {
     };
     let output = std::process::Command::new("python3").arg("-c").arg("import pathlib,sys\np=pathlib.Path(sys.argv[1])/'a.md';p.write_text(p.read_text().replace('Before','After!'))").arg(lib.root()).output().unwrap();
     assert!(output.status.success());
+    let expected = crate::revision(&std::fs::read(lib.root().join("a.md")).unwrap());
     let deadline = Instant::now() + Duration::from_secs(5);
-    while watcher.snapshot().notes[0].revision == old {
+    while watcher.snapshot().notes[0].revision != expected {
         assert!(
             Instant::now() < deadline,
-            "periodic recovery did not repair lost hints"
+            "periodic recovery did not observe the final external bytes"
         );
         thread::sleep(TICK);
     }
-    assert_eq!(
-        watcher.snapshot().notes[0].revision,
-        crate::revision(&std::fs::read(lib.root().join("a.md")).unwrap())
-    );
+    assert_eq!(watcher.snapshot().notes[0].revision, expected);
     watcher.shutdown().unwrap();
 }
 
