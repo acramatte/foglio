@@ -476,17 +476,33 @@ describe("desktop UI state", () => {
   await vi.waitFor(()=>expect(api.create).toHaveBeenCalledWith(1,"Sprite","blog/engineering","",[]));
   expect(api.open).toHaveBeenCalledWith(1,"blog/engineering/Sprite.md");
  });
- it("offers existing tags for removal and disables removal when none exist",async()=>{
+ it("renders every existing tag as an accessible remove button",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const tagged=note("a.md");tagged.tags=["work","urgent"];
-  const {host,api}=setup({open:vi.fn(async(_s,path)=>path==="a.md"?tagged:note(path)),tag:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]})});
-  await app.start();await app.open("a.md");host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!.click();
+  let opened=note("a.md");opened.tags=["work","urgent!"];
+  const tag=vi.fn().mockImplementation(async()=>{opened={...opened,tags:["work"],revision:"r1"};return {session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]};});
+  const {host,api}=setup({open:vi.fn(async(_s,path)=>path==="a.md"?opened:note(path)),tag});
+  await app.start();await app.open("a.md");const origin=host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!;origin.click();
   await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
-  const select=host.querySelector<HTMLSelectElement>("select[data-testid=operation-value]")!;
-  expect([...select.options].map(option=>option.value)).toEqual(["work","urgent"]);select.value="urgent";
-  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
-  await vi.waitFor(()=>expect(api.tag).toHaveBeenCalledWith(1,"a.md","hash","urgent",false));
-  await app.open("b.md");expect(host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!.disabled).toBe(true);
+  expect(host.querySelector("select[data-testid=operation-value]")).toBeNull();
+  const remove=[...host.querySelectorAll<HTMLButtonElement>("[data-testid=remove-tag]")];
+  expect(remove.map(button=>button.textContent)).toEqual(["work×","urgent!×"]);
+  expect(remove.map(button=>button.getAttribute("aria-label"))).toEqual(["Remove tag work","Remove tag urgent!"]);
+  remove[1]!.click();
+  await vi.waitFor(()=>expect(api.tag).toHaveBeenCalledWith(1,"a.md","hash","urgent!",false));
+  await vi.waitFor(()=>expect(document.activeElement).toBe(origin));
+ });
+ it("removes the only tag and moves focus to the enabled add-tag action",async()=>{
+  HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
+  let opened=note("a.md");opened.tags=["work"];
+  const tag=vi.fn().mockImplementation(async()=>{opened={...opened,tags:[],revision:"r1"};return {session:1,path:"a.md",revision:"r1",file_committed:true,warnings:[]};});
+  const {host,api}=setup({open:vi.fn(async(_s,path)=>path==="a.md"?opened:note(path)),tag});
+  await app.start();await app.open("a.md");host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!.click();
+  await vi.waitFor(()=>expect(host.querySelector("[data-testid=remove-tag]")).not.toBeNull());
+  host.querySelector<HTMLButtonElement>("[data-testid=remove-tag]")!.click();
+  await vi.waitFor(()=>expect(api.tag).toHaveBeenCalledWith(1,"a.md","hash","work",false));
+  const untag=host.querySelector<HTMLButtonElement>("[data-testid=untag-note]")!;
+  const add=host.querySelector<HTMLButtonElement>("[data-testid=tag-note]")!;
+  await vi.waitFor(()=>expect(untag.disabled).toBe(true));expect(document.activeElement).toBe(add);
  });
  it("retains the mutation lock through its follow-up open",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};

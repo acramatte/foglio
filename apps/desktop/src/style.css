@@ -429,6 +429,11 @@ dialog::backdrop { background: #29352f66; }
 dialog h2 { margin: 0 0 16px; font-size: 18px; }
 dialog label, dialog input, dialog select { display: block; width: 100%; margin-bottom: 12px; }
 dialog button { margin: 12px 8px 0 0; }
+.tag-removal-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; padding: 0; list-style: none; }
+dialog .remove-tag-pill { display: inline-flex; align-items: center; max-width: 100%; min-width: 0; gap: 7px; margin: 0; border-radius: 999px; padding: 6px 9px 6px 12px; background: #f1f3ed; }
+dialog .remove-tag-pill:hover { border-color: #c88468; background: #fff0df; }
+.remove-tag-name { min-width: 0; overflow-wrap: anywhere; }
+.remove-tag-x { flex: none; color: #8b3c24; font-size: 16px; line-height: 1; }
 .shortcuts-dialog { max-width: 560px; }
 .shortcuts { margin-top: 16px; max-height: 60vh; overflow-y: auto; }
 .shortcut-group + .shortcut-group { margin-top: 16px; }
@@ -592,6 +597,9 @@ footer button { color: var(--muted); }
 dialog { background: var(--editor); color: var(--text); border-color: var(--border); }
 dialog::backdrop { background: rgb(0 0 0 / .48); }
 dialog input, dialog select { background: var(--list); color: var(--text); border-color: var(--border); }
+dialog .remove-tag-pill { background: var(--list); }
+dialog .remove-tag-pill:hover { border-color: var(--error); background: var(--code); }
+.remove-tag-x { color: var(--error); }
 .shortcut-group h3, .shortcut-separator, .shortcut-plus { color: var(--muted); }
 .shortcut-keys kbd { background: var(--code); color: var(--text); border-color: var(--border); }
 .shortcut-description { color: var(--muted); }
