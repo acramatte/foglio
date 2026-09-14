@@ -9,6 +9,7 @@ import {
 import { classifyLink, renderMarkdown, wrapMarkdownLink } from "./markdown";
 import { Editor } from "./editor";
 import { SourceHistory } from "./source-history";
+import { applyFormat, type FormatAction } from "./format";
 
 function element<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -38,10 +39,24 @@ export function primaryModifier(): string {
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
   return /mac/i.test(nav.userAgentData?.platform || nav.platform || nav.userAgent) ? "⌘" : "Ctrl";
 }
+const FORMAT_CONTROLS: ReadonlyArray<{ action: FormatAction; label: string; title: string }> = [
+  { action: "bold", label: "B", title: "Bold" },
+  { action: "italic", label: "I", title: "Italic" },
+  { action: "strike", label: "S", title: "Strikethrough" },
+  { action: "code", label: "</>", title: "Inline code" },
+  { action: "link", label: "Link", title: "Link" },
+  { action: "heading", label: "H", title: "Heading" },
+  { action: "quote", label: "Quote", title: "Quote" },
+  { action: "bullet", label: "List", title: "Bullet list" },
+  { action: "ordered", label: "1.", title: "Numbered list" },
+  { action: "fence", label: "</> block", title: "Code block" },
+];
 const SHORTCUTS: ReadonlyArray<{ title: string; items: ReadonlyArray<Shortcut> }> = [
   { title: "Write", items: [
     { keys: [[MODIFIER, "N"]], description: "Create a note" },
     { keys: [[MODIFIER, "S"]], description: "Save the note now. Typing already saves on its own." },
+    { keys: [[MODIFIER, "B"]], description: "Bold the selected Markdown in the source editor" },
+    { keys: [[MODIFIER, "I"]], description: "Italicize the selected Markdown in the source editor" },
     { keys: [[MODIFIER, "K"]], description: "Turn the selection into a Markdown link" },
   ]},
   { title: "Read", items: [
@@ -77,6 +92,7 @@ export class App {
   private readonly saveStatus = element("span", "", "save-status");
   private readonly saveError = element("div", "", "save-error");
   private readonly tools = element("div", undefined, "editor-tools");
+  private readonly formatBar = element("div", undefined, "format-bar");
   private readonly retry = element("button", "Retry save");
   private readonly resolution = element("div", undefined, "conflict-tools");
   private state: DesktopState | null = null;
@@ -132,6 +148,12 @@ export class App {
     if (event.key.toLowerCase() === "k") {
       event.preventDefault();
       this.insertMarkdownLink();
+      return;
+    }
+    if (this.host.ownerDocument.activeElement !== this.source) return;
+    if (event.key.toLowerCase() === "b" || event.key.toLowerCase() === "i") {
+      event.preventDefault();
+      this.format(event.key.toLowerCase() === "b" ? "bold" : "italic");
     }
   };
   constructor(
@@ -265,9 +287,22 @@ export class App {
       const button=element("button",label);button.dataset.testid="conflict-"+action;
       button.addEventListener("click",()=>{void this.resolveConflict(action);});this.resolution.append(button);
     }
+    this.formatBar.dataset.testid="format-bar";
+    this.formatBar.setAttribute("role","toolbar");
+    this.formatBar.setAttribute("aria-label","Markdown formatting");
+    for (const control of FORMAT_CONTROLS) {
+      const button=element("button",control.label);
+      button.type="button";
+      button.title=control.title;
+      button.setAttribute("aria-label",control.title);
+      button.dataset.testid="format-"+control.action;
+      button.addEventListener("mousedown",event=>event.preventDefault());
+      button.addEventListener("click",()=>this.format(control.action));
+      this.formatBar.append(button);
+    }
     this.previewScroll.append(this.preview);
     this.sourceWrap.append(this.gutter, this.source);
-    reader.append(this.metadata, this.tools, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll);
+    reader.append(this.metadata, this.tools, this.formatBar, this.saveStatus, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
@@ -758,11 +793,25 @@ export class App {
     this.mode=mode;this.renderEditor();
     if (this.editor) (mode === "source" ? this.source : this.previewScroll).focus();
   }
+  private format(action: FormatAction): void {
+    if (action === "link") {
+      this.insertMarkdownLink();
+      return;
+    }
+    if (this.busy || this.selecting || !this.editor || this.source.hidden || this.source.readOnly) return;
+    const next=applyFormat(this.source.value,this.source.selectionStart,this.source.selectionEnd,action);
+    this.sourceHistory.replace(next.text, next.start, next.end, () => {
+      this.editor?.edit(this.source.value);
+      this.updateGutter();
+    });
+    this.source.focus();
+  }
   private renderEditor(): void {
     for (const b of this.host.querySelectorAll<HTMLButtonElement>(".note-card, [data-testid=new-note]")) b.disabled=this.busy || this.selecting;
     const editor=this.editor;
     this.tools.hidden=!editor;this.source.hidden=!editor || this.mode!=="source";
     this.sourceWrap.hidden=this.source.hidden;
+    this.formatBar.hidden=this.source.hidden;
     this.updateGutter();
     this.preview.hidden=!!editor && this.mode!=="preview";
     this.previewScroll.hidden=this.preview.hidden;
@@ -772,6 +821,7 @@ export class App {
     this.retry.disabled=this.busy;
     this.resolution.hidden=editor?.status!=="conflict" && editor?.status!=="missing_on_disk";
     for (const b of this.resolution.querySelectorAll("button")) b.disabled=this.busy;
+    for (const b of this.formatBar.querySelectorAll<HTMLButtonElement>("button")) b.disabled=this.busy;
     for (const b of this.tools.querySelectorAll<HTMLButtonElement>("button")) {
       b.disabled=this.busy || (b.dataset.testid==="untag-note" && !this.note?.tags.length);
       if (b.dataset.testid?.endsWith("-mode")) b.setAttribute("aria-pressed", String(b.dataset.testid===this.mode+"-mode"));
@@ -790,11 +840,13 @@ export class App {
     const next = wrapMarkdownLink(this.source.value, this.source.selectionStart, this.source.selectionEnd);
     this.source.focus();
     if (next.text !== this.source.value) {
-      this.source.value = next.text;
-      this.editor.edit(this.source.value);
-      this.updateGutter();
+      this.sourceHistory.replace(next.text, next.selectionStart, next.selectionEnd, () => {
+        this.editor?.edit(this.source.value);
+        this.updateGutter();
+      });
+    } else {
+      this.source.setSelectionRange(next.selectionStart, next.selectionEnd);
     }
-    this.source.setSelectionRange(next.selectionStart, next.selectionEnd);
   }
   // Vim-style line-number visibility toggle (Ctrl/Cmd+L). Session state for
   // now; a future config layer will hydrate and persist this flag.

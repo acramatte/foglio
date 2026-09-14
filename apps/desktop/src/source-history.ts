@@ -98,4 +98,15 @@ export class SourceHistory {
     this.changed(target.body);
     this.before = snapshot(this.source, this.rawBody());this.breakGroup();
   }
+
+  // Programmatic replacements (format bar, link wrap) skip the input event
+  // path; record them as one history step after the editor has committed.
+  replace(value: string, start: number, end: number, commit: () => void): void {
+    if (this.source.readOnly || this.composing) return;
+    const before = snapshot(this.source, this.rawBody());
+    this.source.value = value;
+    this.source.setSelectionRange(start, end);
+    commit();
+    this.record(before, snapshot(this.source, this.rawBody()), "insertReplacementText");
+  }
 }

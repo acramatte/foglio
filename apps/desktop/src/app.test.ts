@@ -173,11 +173,11 @@ describe("Phase 7 keyboard and accessibility", () => {
   try {
     Object.defineProperty(navigator,"platform",{value:"MacIntel",configurable:true});
     const mac=open();
-    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(6);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
+    expect(mac.caps.filter(cap=>cap==="⌘")).toHaveLength(8);expect(mac.caps).not.toContain("Ctrl");expect(mac.detail).toContain("⌘ (Command)");
     host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
     render("Linux x86_64");
     const linux=open();
-    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(6);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
+    expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(8);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
   } finally {if (original) Object.defineProperty(navigator,"platform",original);}
  });
  it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
@@ -299,6 +299,68 @@ describe("markdown link hotkey", () => {
   const dialog=host.querySelector("dialog")!;
   expect(dialog.textContent).toContain("Ctrl+K");
   expect(dialog.textContent).toContain("Turn the selection into a Markdown link");
+ });
+ it("uses the same wrap from the formatting bar Link control",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="see https://example.org now";
+  source.setSelectionRange(4,23);source.focus();
+  host.querySelector<HTMLButtonElement>("[data-testid=format-link]")!.click();
+  expect(source.value).toBe("see [](https://example.org) now");
+  expect(source.selectionStart).toBe(5);
+ });
+});
+describe("source formatting bar", () => {
+ it("is hidden until source mode and names every control",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  const bar=host.querySelector<HTMLElement>("[data-testid=format-bar]")!;
+  expect(bar.hidden).toBe(true);
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  expect(bar.hidden).toBe(false);
+  expect(bar.getAttribute("role")).toBe("toolbar");
+  expect([...bar.querySelectorAll("button")].map(b=>b.getAttribute("aria-label"))).toEqual([
+    "Bold","Italic","Strikethrough","Inline code","Link","Heading","Quote","Bullet list","Numbered list","Code block",
+  ]);
+ });
+ it("wraps the current selection through the bar without stealing textarea focus",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="say hello";source.setSelectionRange(4,9);source.focus();
+  host.querySelector<HTMLButtonElement>("[data-testid=format-bold]")!.click();
+  expect(source.value).toBe("say **hello**");
+  expect(source.selectionStart).toBe(4);expect(source.selectionEnd).toBe(13);
+  expect(host.querySelector<HTMLElement>("[data-testid=save-status]")!.dataset.state).toBe("dirty");
+ });
+ it("applies Ctrl+B only while the source editor is focused",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="hello";source.setSelectionRange(0,5);source.focus();
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"b",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("**hello**");
+  host.querySelector<HTMLInputElement>("[data-testid=search-input]")!.focus();
+  document.dispatchEvent(new KeyboardEvent("keydown",{key:"i",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("**hello**");
+ });
+ it("lists formatting shortcuts in the keyboard help dialog",async()=>{
+  const {host}=setup();await app.start();
+  host.querySelector<HTMLButtonElement>("[data-testid=keyboard-help]")!.click();
+  const dialog=host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain("Ctrl+B");
+  expect(dialog.textContent).toContain("Ctrl+I");
+  expect(dialog.textContent).toContain("Ctrl+K");
+ });
+ it("undoes a format-bar wrap as one history step",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
+  const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
+  source.value="hello";source.setSelectionRange(0,5);source.focus();
+  host.querySelector<HTMLButtonElement>("[data-testid=format-bold]")!.click();
+  expect(source.value).toBe("**hello**");
+  source.dispatchEvent(new KeyboardEvent("keydown",{key:"z",ctrlKey:true,bubbles:true,cancelable:true}));
+  expect(source.value).toBe("hello");
  });
 });
 describe("desktop UI state", () => {
