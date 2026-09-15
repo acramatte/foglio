@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor, preserveNewlines } from "./editor";
 import type { Mutation, Note } from "./api";
-const note: Note = {session:1,path:"a.md",title:"A",tags:[],body:"old",source:"old",revision:"r0"};
+const note: Note = {session:1,path:"a.md",title:"A",tags:[],body:"old",source:"old",revision:"r0",created:null};
 const ack = (revision="r1"): Mutation => ({session:1,path:"a.md",revision,file_committed:true,warnings:[]});
 function deferred<T>() { let resolve!:(value:T)=>void; const promise=new Promise<T>(r=>{resolve=r;});return {promise,resolve}; }
 afterEach(()=>vi.useRealTimers());

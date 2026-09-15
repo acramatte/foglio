@@ -4,7 +4,7 @@ import { App } from "./app";
 import type { Api, Note, DesktopState, Browse } from "./api";
 const state: DesktopState = {session:1,root:"/notes",generation:1,watcher_active:true,error:null};
 const browse: Browse = {session:1,generation:1,root:"/notes",notes:[{path:"a.md",title:"One",tags:["work"]},{path:"b.md",title:"Two",tags:[]}],folders:["empty"],diagnostics:[],incomplete:false};
-const note = (path:string, body=path):Note => ({session:1,path,title:path,tags:[],body,source:body,revision:"hash"});
+const note = (path:string, body=path):Note => ({session:1,path,title:path,tags:[],body,source:body,revision:"hash",created:null});
 function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promise<T>(r => {resolve=r}); return {promise,resolve}; }
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
@@ -451,6 +451,21 @@ describe("source formatting bar", () => {
   expect(source.value).toBe("**hello**");
   source.dispatchEvent(new KeyboardEvent("keydown",{key:"z",ctrlKey:true,bubbles:true,cancelable:true}));
   expect(source.value).toBe("hello");
+ });
+});
+describe("note creation date",()=>{
+ const CREATED=Date.UTC(2026,8,15,8,45,12);
+ it("shows the localized creation date and time in the note metadata",async()=>{
+  const {host}=setup({open:vi.fn(async(_s,path)=>({...note(path),created:CREATED}))});
+  await app.start();await app.open("a.md");
+  const when=host.querySelector<HTMLTimeElement>(".metadata time")!;
+  expect(when.dateTime).toBe(new Date(CREATED).toISOString());
+  expect(when.getAttribute("aria-label")).toBe("Created");
+  expect(when.textContent).toBe(new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(CREATED)));
+ });
+ it("omits the creation time when the filesystem does not report one",async()=>{
+  const {host}=setup();await app.start();await app.open("a.md");
+  expect(host.querySelector(".metadata time")).toBeNull();
  });
 });
 describe("word count", () => {
