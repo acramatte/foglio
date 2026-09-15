@@ -189,6 +189,14 @@ pub fn run() {
     let backend = Arc::new(Backend::new().expect("desktop event worker"));
     let startup = backend.clone();
     let app = tauri::Builder::default()
+        // Register first: a later launcher invocation signals this process and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(backend.clone())
         .manage(Arc::new(CloseState::default()))
         .on_window_event(|window, event| {
