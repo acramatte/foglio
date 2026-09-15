@@ -281,6 +281,21 @@ nav h3 {
   font-family: ui-monospace, monospace;
   font-size: 10px;
 }
+.note-id {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.note-id > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-id .first-seen {
+  font-size: 10px;
+}
 .preview-scroll {
   min-height: 0;
   overflow: auto;
@@ -575,8 +590,8 @@ nav h3 { margin: 16px 8px 5px; color: var(--muted); letter-spacing: .08em; }
 .note-path, .snippet, .empty-list, .hint { color: var(--muted); }
 .reader { background: var(--editor); }
 .reader-header { display: flex; align-items: center; min-width: 0; border-bottom: 1px solid var(--border); background: var(--editor); }
-.metadata { flex: 1; min-width: 0; min-height: 42px; padding: 10px 16px; gap: 4px 12px; border: 0; color: var(--muted); }
-.metadata > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.metadata { flex: 1; min-width: 0; min-height: 42px; padding: 7px 16px; gap: 4px 12px; border: 0; color: var(--muted); }
+.note-id { line-height: 1.2; }
 .metadata small { display: none; }
 .editor-tools, .conflict-tools, .format-bar { padding: 7px 10px; gap: 5px; }
 .editor-tools { align-items: center; flex: none; }

@@ -103,6 +103,14 @@ The user authorized permissive search after literal-only desktop search returned
 | D29 | Smart mode — complete-word matches first, then notes where every token of at least two characters also matches a word prefix — is the desktop default. Literal stays the CLI default with explicit `--phrase`/`--prefix`/`--smart`. Tiering, not score mixing, keeps exact results ahead of expansions; title stays weighted above body (10/1/2/2) | Tier, dedup, limit, filter, case and interior-substring tests in `crates/notes-core/tests/search.rs`; desktop backend test; native WebKit acceptance `tests/acceptance/search_smart.py`. [Spec](specs/smart-search.md) |
 | D30 | Partial-coverage recovery, typo suggestions (“did you mean”) and result highlighting are separately gated follow-ups. Arbitrary substring matching, stemming, synonyms and semantic/vector search stay out of scope. No index migration or new dependency was introduced | [Smart search spec](specs/smart-search.md); per-keystroke prefix cost belongs with the still-open P7-03 latency budget |
 
+## First-seen creation evidence
+
+The desktop shows a note's creation date/time. Atomic saves replace the file's inode, so the filesystem birth time resets on every save and cannot be the displayed value; Linux offers no API to restore a birth time, and app-inserted frontmatter timestamps remain forbidden.
+
+| ID | Accepted choice | Evidence |
+|---|---|---|
+| D31 | The disposable index keeps a `first_seen` table (schema v3): the earliest birth time ever observed per path, updated with a min-guard so the value can move backwards on a backup restore but never forwards. `reindex` deliberately preserves it because it is not derivable from files; deleting the cache file loses it, degrading honestly to the current birth time. The UI labels it "First seen" — it is the earliest date Foglio witnessed, not the note's true origin for libraries adopted after the fact | `migrations/003_first_seen.sql`; survive-save/move/reindex and min-guard tests in `crates/notes-core/tests/index.rs`; desktop backend test in `apps/desktop/src-tauri/tests/backend.rs` |
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |

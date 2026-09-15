@@ -56,6 +56,50 @@ fn index_lifecycle_warm_reuse_and_disposable_cache() {
 }
 
 #[test]
+fn first_seen_survives_saves_moves_reindex_and_never_grows() {
+    let (_temp, lib) = setup();
+    lib.create("a.md", "apple", &[]).unwrap();
+    assert_eq!(lib.status().unwrap().indexed_notes, 1);
+    let first = lib
+        .first_seen_created_ms("a.md")
+        .expect("first-seen recorded");
+    // Same-filesystem moves keep the inode, so the new path inherits the date.
+    let entry = lib.get("a.md").unwrap();
+    let commit = lib
+        .move_note("a.md", &entry.document.revision, "sub/moved.md")
+        .unwrap();
+    assert_eq!(lib.first_seen_created_ms("sub/moved.md"), Some(first));
+    // An ordinary save replaces the inode and resets its birth time; the
+    // recorded first-seen date must not follow it.
+    lib.update("sub/moved.md", commit.revision.as_ref().unwrap(), "peach")
+        .unwrap();
+    assert_eq!(lib.first_seen_created_ms("sub/moved.md"), Some(first));
+    // Reindex rebuilds derived tables but preserves first-seen evidence.
+    lib.reindex().unwrap();
+    assert_eq!(lib.first_seen_created_ms("sub/moved.md"), Some(first));
+    // A restore from backup (older birth time) moves the date backwards; a
+    // newer birth time from an offline rewrite never moves it forward.
+    {
+        let conn = rusqlite::Connection::open(lib.cache_path().unwrap()).unwrap();
+        conn.execute(
+            "UPDATE first_seen SET created_ms=created_ms-86400000 WHERE path='sub/moved.md'",
+            [],
+        )
+        .unwrap();
+    }
+    let earlier = first - 86_400_000;
+    assert_eq!(lib.first_seen_created_ms("sub/moved.md"), Some(earlier));
+    fs::write(lib.root().join("sub/moved.md"), "cherry").unwrap();
+    lib.rescan().unwrap();
+    assert_eq!(lib.first_seen_created_ms("sub/moved.md"), Some(earlier));
+    // Removing the cache file itself loses the evidence; the honest reset is
+    // the current birth time, never an invented date.
+    fs::remove_file(lib.cache_path().unwrap()).unwrap();
+    lib.reindex().unwrap();
+    assert!(lib.first_seen_created_ms("sub/moved.md").unwrap() >= earlier);
+}
+
+#[test]
 fn identical_content_paths_are_searchable_and_malformed_files_are_excluded() {
     let (_temp, lib) = setup();
     let source = "---\nid: arbitrary\n---\n# Unique\nneedle";
@@ -252,7 +296,7 @@ fn schema_one_cache_is_discarded_and_rebuilt_without_source_writes() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        2
+        3
     );
     assert_eq!(
         conn.query_row(

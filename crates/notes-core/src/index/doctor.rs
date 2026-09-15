@@ -109,9 +109,10 @@ fn check_cache(
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     let expected = Connection::open_in_memory()?;
     expected.execute_batch(include_str!("../../migrations/002_index.sql"))?;
-    if version != 2 || schema(conn)? != schema(&expected)? {
+    expected.execute_batch(include_str!("../../migrations/003_first_seen.sql"))?;
+    if version != 3 || schema(conn)? != schema(&expected)? {
         report.reindex_safe = false;
-        report.issue("", ErrorCode::Index, "cache_schema", format!("unsupported or damaged cache schema (version {version}, expected 2)"), "Do not overwrite unknown schemas. Use the matching Foglio version or manually remove only this disposable cache after closing all clients, then run reindex.");
+        report.issue("", ErrorCode::Index, "cache_schema", format!("unsupported or damaged cache schema (version {version}, expected 3)"), "Do not overwrite unknown schemas. Use the matching Foglio version or manually remove only this disposable cache after closing all clients, then run reindex.");
         return Ok(());
     }
     let health: String = conn.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
@@ -222,6 +223,7 @@ impl Library {
             root: self.root(),
             old: &old,
             found: HashMap::new(),
+            birth: HashMap::new(),
             unknown: Vec::new(),
             force: true,
             status: IndexStatus::default(),
