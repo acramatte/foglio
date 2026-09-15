@@ -24,13 +24,13 @@ Seven core doctor tests and an actual CLI lifecycle test verify missing-state no
 
 ## Keyboard, focus and contention (P7-02 / V26)
 
-- Ctrl+F focuses/selects literal library search; Down enters results, Up/Down/Home/End navigate, Escape returns to search, Enter/Space opens.
+- Ctrl+F focuses/selects library search; Down enters results, Up/Down/Home/End navigate, Escape returns to search, Enter/Space opens.
 - Existing Ctrl+N/E/S create, switch source/preview and save remain. Modal dialogs suppress global shortcuts. Composition/repeated/Alt key events are ignored.
 - Keyboard-help control, labelled/described native dialogs, cancellation focus restoration, stable result/filter focus, focusable preview, polite result counts instead of live-announcing whole documents, explicit empty-filter reset and result retry.
 - Small-height layout retains a clickable last result at 400/600 px. Native testing caught and fixed the new help control consuming list space.
 - One shared `Library` handle coordinates operations before taking the existing filesystem lock. Local waiting is capped at two seconds; reentry remains Busy. Separate handles/processes still use the immediate nonblocking filesystem lock. The guard spans the filesystem lock lifetime, preserving stale-write/commit behavior. This reduces same-process watcher/mutation failures; it is **not a contention-free or large-library responsiveness promise**.
 
-`phase7_keyboard.py` uses real W3C key actions, no JS clicks/focus/edits or mocked IPC. It exercises onboarding, create, literal body search, edit/save, move, native Escape restoration, shortcut help/modal isolation and exact bytes using the shipped executable. DOM labels and keyboard operation are checked; **physical-display visual quality and actual assistive-technology/screen-reader qualification remain unverified**.
+`phase7_keyboard.py` uses real W3C key actions, no JS clicks/focus/edits or mocked IPC. It exercises onboarding, create, body search (Smart since the [smart search](specs/smart-search.md) delivery), edit/save, move, native Escape restoration, shortcut help/modal isolation and exact bytes using the shipped executable. DOM labels and keyboard operation are checked; **physical-display visual quality and actual assistive-technology/screen-reader qualification remain unverified**.
 
 ## Measurements (P7-03 / V25)
 

@@ -94,6 +94,15 @@ User authorized Phase 6. **D19 resolved:** explicit reload/local-discard or save
 
 Watcher reads pause queued autosaves and wait for current acknowledgements. Saves verify their committed revision before clearing the buffer or allowing navigation/close, including delayed acknowledgements without newer typing. A committed write whose readback fails is not replayed by Retry save. Native two-process and simulated sync-copy evidence, cooperative-lock contention recovery, supported-YAML limitations and final external-writer race limits are recorded in [Phase 6](phase6.md).
 
+## Smart search delivery
+
+The user authorized permissive search after literal-only desktop search returned nothing for `memo` against a note titled `Memory`. Options were weighed (BM25 alone, substring matching, embeddings) and the smallest useful change was chosen: keep FTS5 and its weighted BM25, widen candidate matching, and never replace the engine.
+
+| ID | Accepted choice | Evidence |
+|---|---|---|
+| D29 | Smart mode — complete-word matches first, then notes where every token of at least two characters also matches a word prefix — is the desktop default. Literal stays the CLI default with explicit `--phrase`/`--prefix`/`--smart`. Tiering, not score mixing, keeps exact results ahead of expansions; title stays weighted above body (10/1/2/2) | Tier, dedup, limit, filter, case and interior-substring tests in `crates/notes-core/tests/search.rs`; desktop backend test; native WebKit acceptance `tests/acceptance/search_smart.py`. [Spec](specs/smart-search.md) |
+| D30 | Partial-coverage recovery, typo suggestions (“did you mean”) and result highlighting are separately gated follow-ups. Arbitrary substring matching, stemming, synonyms and semantic/vector search stay out of scope. No index migration or new dependency was introduced | [Smart search spec](specs/smart-search.md); per-keystroke prefix cost belongs with the still-open P7-03 latency budget |
+
 ## Proposed implementation defaults for later phases
 
 | ID | Proposal | Why / decision gate |

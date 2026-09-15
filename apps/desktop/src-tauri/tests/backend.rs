@@ -22,6 +22,51 @@ fn fixture() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
     (temp, root, state)
 }
 #[test]
+fn desktop_search_matches_word_prefixes_and_prefers_titles() {
+    let (_temp, root, state) = fixture();
+    fs::write(root.join("memory.md"), "# Memory\nKeep retros short\n").unwrap();
+    fs::write(
+        root.join("spending.md"),
+        "# Spending\nbudget report and memory notes\n",
+    )
+    .unwrap();
+    let backend = Backend::new().unwrap();
+    let s = backend.select_with_state(&root, &state).unwrap().session;
+    // The desktop searches Smart: `memo` reaches `Memory` without the user
+    // finishing the word, and a title hit outranks a body hit.
+    let hits = backend.search(s, "memo".into(), None, None).unwrap().hits;
+    assert_eq!(
+        hits.iter().map(|h| h.path.as_str()).collect::<Vec<_>>(),
+        ["memory.md", "spending.md"]
+    );
+    assert_eq!(hits[0].title, "Memory");
+    // Interior substrings stay unmatched and filters still exclude notes that
+    // did match.
+    assert!(
+        backend
+            .search(s, "get".into(), None, None)
+            .unwrap()
+            .hits
+            .is_empty()
+    );
+    assert!(
+        backend
+            .search(s, "memo".into(), Some("rust".into()), None)
+            .unwrap()
+            .hits
+            .is_empty()
+    );
+    assert_eq!(
+        backend
+            .search(s, "needle".into(), Some("rust".into()), None)
+            .unwrap()
+            .hits
+            .len(),
+        1
+    );
+    backend.shutdown();
+}
+#[test]
 fn readonly_browse_search_open_and_selection_preserve_bytes() {
     let (_temp, root, state) = fixture();
     fs::write(root.join("plain.md"), "# Import\nuntouched\n").unwrap();

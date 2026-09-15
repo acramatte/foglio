@@ -13,7 +13,7 @@ A local-first Markdown document application for notes, repository docs and agent
 
 Foglio works with the Markdown files you already have. Open a folder of notes, repository documentation, or agent plans; Foglio never requires frontmatter, generated IDs, or a proprietary file format. Your files remain useful in any text editor.
 
-- **Browse a real library** — navigate folders, filter exact tags, and search titles, paths, tags, and note text.
+- **Browse a real library** — navigate folders, filter exact tags, and search titles, paths, tags, and note text. An unfinished word already finds its note (`memo` finds `Memory`), and title or complete-word matches rank above body-only matches.
 - **Write in Markdown** — create notes, edit source, and switch to a safe rendered preview. CommonMark and useful GFM, including tables, task lists, fenced code, links, and strikethrough, are supported.
 - **Keep control of changes** — guarded autosave preserves frontmatter and refuses silent overwrites. Rename, move, tag, and permanently delete notes through explicit controls.
 - **Use your normal tools too** — Foglio watches external edits. Clean notes refresh; if a note changes while you are editing, saving pauses and you can reload the file, discard local work deliberately, or save it as a new note.
@@ -63,7 +63,7 @@ python3 tests/acceptance/phase1.py
 python3 tests/acceptance/phase2.py
 ```
 
-The product is **Foglio**; the executable is `notes`. Its commands cover library selection, note creation and lifecycle, tags, literal search, reconciliation, index rebuilding, read-only diagnostics, and status. Run `notes --help` for the full interface.
+The product is **Foglio**; the executable is `notes`. Its commands cover library selection, note creation and lifecycle, tags, literal search with explicit `--phrase`/`--prefix`/`--smart` modes, reconciliation, index rebuilding, read-only diagnostics, and status. Run `notes --help` for the full interface.
 
 Tests use isolated temporary libraries and the compiled executable; personal notes are never used as fixtures. The full local qualification also covers the desktop app, native WebKit acceptance, Debian package construction, and staged-package execution. Run `bash scripts/package-linux.sh` to create a Debian/amd64 package. Detailed evidence, limits, and release blockers are in [Phase 7](docs/phase7.md).
 
@@ -71,6 +71,7 @@ Tests use isolated temporary libraries and the compiled executable; personal not
 
 - [Product specification](docs/specs/product.md): user-facing scope and requirements.
 - [Technical specification](docs/specs/technical.md): domain and safety contracts.
+- [Smart search proposal](docs/specs/smart-search.md): permissive matching, title-weighted relevance, and highlighting follow-up.
 - [Implementation plan](docs/implementation-plan.md): phase gates and delivery discipline.
 - [Task backlog](docs/tasks.md): work items and execution evidence.
 - [Verification specification](docs/specs/verification.md): acceptance scenarios.

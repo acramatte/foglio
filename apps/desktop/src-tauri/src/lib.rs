@@ -376,7 +376,9 @@ impl Backend {
         folder: Option<String>,
     ) -> Result<Search> {
         self.with_selection(session, |s| {
-            let mut query = SearchQuery::literal(&query);
+            // The desktop defaults to Smart search: complete words first, then
+            // words that start with a query token (`memo` finds `Memory`).
+            let mut query = SearchQuery::smart(&query);
             query.tag = tag;
             query.folder = folder;
             let report = s.library.search(&query).map_err(err)?;
