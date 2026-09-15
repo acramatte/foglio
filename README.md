@@ -27,23 +27,17 @@ Source edits → revision-guarded autosave → atomic Markdown write → refresh
 
 ## Desktop
 
-Download the installer for your platform from [GitHub Releases](https://github.com/acramatte/foglio/releases). Current release `v0.2.1` includes:
+Download the installer for your platform from the [latest release](https://github.com/acramatte/foglio/releases/latest). The assets there are:
 
-| Platform | Download | SHA-256 |
-|---|---|---|
-| macOS (Apple Silicon) | [`Foglio_0.2.1_aarch64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_aarch64.dmg) | `14bb2333e2e82befa74a8924e3012d0d17f28d14545774618b3d64bcaa06d4df` |
-| macOS (Intel) | [`Foglio_0.2.1_x64.dmg`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_x64.dmg) | `65f86cbe0420c81e498b4c94a8fefbbc8cf2341442cacee9179a71e2366e5115` |
-| Debian/Ubuntu (x86_64) | [`Foglio_0.2.1_amd64.deb`](https://github.com/acramatte/foglio/releases/download/v0.2.1/Foglio_0.2.1_amd64.deb) | `59b551d6d355ee0cb55d69087b23ec3700a3d63a8b06e1ef76941b8e3fb498cd` |
+- `Foglio_<version>_amd64.deb` — Debian/Ubuntu (x86_64) desktop package
+- `Foglio_<version>_aarch64.dmg` / `Foglio_<version>_x64.dmg` — macOS desktop builds
+- `foglio-notes-v<version>-linux-x86_64.tar.gz` / `-darwin-aarch64.tar.gz` / `-darwin-x86_64.tar.gz` — standalone `notes` CLI archives
 
-Standalone `notes` CLI archives are also available:
+Every asset is checksummed in the release's signed `SHA256SUMS` and carries a build-provenance attestation. Verify before installing:
 
-| Platform | Download | SHA-256 |
-|---|---|---|
-| macOS (Apple Silicon) | [`foglio-notes-v0.2.1-darwin-aarch64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-darwin-aarch64.tar.gz) | `720717f124fb431421c47b492e4ba98616309d285a51388e678ca5155e446eab` |
-| macOS (Intel) | [`foglio-notes-v0.2.1-darwin-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-darwin-x86_64.tar.gz) | `0db7f6a816c5f759a2b76b7f3060ff4a738d727a7efa6e28ad6d42327ee1beec` |
-| Linux (x86_64) | [`foglio-notes-v0.2.1-linux-x86_64.tar.gz`](https://github.com/acramatte/foglio/releases/download/v0.2.1/foglio-notes-v0.2.1-linux-x86_64.tar.gz) | `453087f4fa5663575990452613873f8d542b99b24ac7809f198758ed25fa7ef3` |
-
-Verify a download before installing it, for example: `sha256sum Foglio_0.2.1_amd64.deb` on Linux or `shasum -a 256 Foglio_0.2.1_aarch64.dmg` on macOS.
+    minisign -Vm SHA256SUMS -p docs/foglio-release.pub
+    shasum -a 256 -c SHA256SUMS
+    gh attestation verify Foglio_<version>_amd64.deb --repo acramatte/foglio
 
 Enter an existing library path to browse folders, tags, and search results. Use **New note** and the **Source/Preview** controls to edit; Ctrl+E toggles the view and Ctrl+S flushes a save. Selection and `init` never modify Markdown. Paths identify documents, while hashes protect revisions. Existing `id` metadata is preserved as ordinary metadata. See the [identity contract](docs/path-identity.md) and [editing and recovery details](docs/phase6.md).
 
