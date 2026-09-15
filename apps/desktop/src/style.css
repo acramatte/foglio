@@ -398,6 +398,11 @@ footer button {
   margin-left: auto;
   font-weight: 600;
 }
+.update-notice[data-state="tampered"] {
+  color: #8a2f2f;
+  text-decoration: none;
+  cursor: default;
+}
 @media (max-height: 600px) {
   .notes .new-note { margin-top: 8px; }
   .notes input { margin-top: 10px; margin-bottom: 8px; }
