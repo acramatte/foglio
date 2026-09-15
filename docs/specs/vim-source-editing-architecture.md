@@ -107,7 +107,7 @@ sequenceDiagram
     R-->>E: Commit outcome and revision
     E->>R: Existing readback verification
     R-->>E: Current snapshot or error
-    E-->>S: Saved only if verified; otherwise retained-buffer error/conflict
+    E-->>S: Saved only if verified, otherwise retained-buffer error/conflict
 ```
 
 This is an integration flow, not a replacement save state machine. Preserve current scheduling rules when an edit arrives during an in-flight write: do not mark a newer generation clean on an older acknowledgement. Conflict/missing/error transitions remain those of `Editor`.
