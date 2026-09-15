@@ -402,6 +402,17 @@ describe("source formatting bar", () => {
     "Bold","Italic","Strikethrough","Inline code","Link","Heading","Quote","Bullet list","Numbered list","Code block",
   ]);
  });
+ it.each([["Linux", "Ctrl"], ["MacIntel", "⌘"]] as const)("shows %s formatting shortcuts in tooltips when available",async(platform,modifier)=>{
+  vi.spyOn(navigator,"platform","get").mockReturnValue(platform);
+  try {
+   const {host}=setup();await app.start();await app.open("a.md");
+   const button=(action:string)=>host.querySelector<HTMLButtonElement>(`[data-testid=format-${action}]`)!;
+   expect(button("bold").title).toBe(`Bold (${modifier}+B)`);
+   expect(button("italic").title).toBe(`Italic (${modifier}+I)`);
+   expect(button("link").title).toBe(`Link (${modifier}+K)`);
+   expect(button("strike").title).toBe("Strikethrough");
+  } finally { vi.restoreAllMocks(); }
+ });
  it("wraps the current selection through the bar without stealing textarea focus",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
   host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
