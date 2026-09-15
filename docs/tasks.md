@@ -192,14 +192,14 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 ## Vim source editing and relative line numbers (proposal)
 
-**Status: specifications only; implementation not started.** See [proposal, implementation plan, acceptance and approval questions](specs/vim-source-editing.md). These are scoped desktop-editor follow-ups, not a full Vim runtime or an expansion of the unrelated exclusions below.
+**Status: specifications only; implementation not started.** See [specification, implementation plan, acceptance and resolved owner decisions](specs/vim-source-editing.md). These are scoped desktop-editor follow-ups, not a full Vim runtime or an expansion of the unrelated exclusions below.
 
-- [ ] VM-00: resolve compatibility, shortcut and command-line scope with the owner; record approved defaults in the proposal.
+- [x] VM-00: owner accepted core motions/operators, Vim shortcut priority and bounded command-line scope; relative numbering must show the absolute current line (`2,1,3,1` with cursor on line 3). Decisions recorded in the specification; implementation remains open.
 - [ ] VM-01: spike CodeMirror 6 + Vim in native Tauri/WebKit; gate adoption on byte preservation, unified undo, live switching, command safety and recorded performance evidence.
 - [ ] VM-02: integrate a shared Standard source surface with lossless transaction/history handling; retain existing autosave/conflict/close acceptance.
 - [ ] VM-03: add persistent Standard/Vim settings, modes, motions, bounded command line, shortcut precedence and help.
 - [ ] VM-04: verify required Vim compatibility and native regressions; record evidence and platform limitations before claiming completion.
-- [ ] RN-01 (after VM-04): add independent persistent visibility and Absolute/Relative/Hybrid numbering driven by the active selection head.
+- [ ] RN-01 (after VM-04): add independent persistent visibility and Absolute/Relative numbering (Relative uses the absolute current line) driven by the active selection head.
 - [ ] RN-02: qualify selection-only updates, persistence, native gutter geometry and large-document behavior in both keymaps.
 
 Dependency details and acceptance IDs live in the linked specification. No task above is complete merely because this planning branch exists.

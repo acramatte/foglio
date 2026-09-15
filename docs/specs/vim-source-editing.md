@@ -1,6 +1,6 @@
 # Vim source editing and relative line numbers
 
-**Status: proposal, not implemented or approved for implementation.** This branch contains specifications and handoff tasks only. Open a PR later; do not open one as part of this handoff. Baseline inspected: `e692083` on `origin/main`.
+**Status: product questions resolved by the owner; implementation not started.** This branch contains specifications and handoff tasks only. Open a PR later; do not open one as part of this handoff. Baseline inspected: `e692083` on `origin/main`.
 
 ## Outcome and scope
 
@@ -8,7 +8,7 @@ Let users edit Markdown source with familiar Vim motions and Normal, Insert, Vis
 
 “Visual” means Vim selection, not Foglio's rendered **Preview**. Source/Preview remains a separate view choice. This is embedded Vim keybinding compatibility, not a full Vim/Neovim runtime: no shell, plugins, `.vimrc`, arbitrary filesystem commands, terminals or LSP in this scope.
 
-All choices below are proposed defaults. Resolve the questions at the end before implementing the affected behavior; the dependency spike gates the editor-engine decision.
+The owner decisions at the end settle compatibility, shortcut ownership, command-line scope and relative-number semantics. Remaining technical choices are implementation guidance; the dependency spike still gates the editor-engine decision. This handoff remains documentation-only, not a request to implement now.
 
 ## Current implementation and constraints
 
@@ -75,7 +75,7 @@ A single dispatcher owns precedence; avoid both the Vim extension and the existi
 4. Reserve `Ctrl+s` for guarded Save in Vim on Linux. On macOS, Command-based application shortcuts remain application actions; Vim's Control-based bindings remain distinct. Vim mode help must show the actual platform-specific precedence.
 5. Outside the focused Vim surface, preserve existing application shortcuts. Standard mode retains its existing keymap.
 
-On Linux, `Ctrl+e` in Vim scrolls instead of toggling Preview, `Ctrl+f` pages instead of focusing library search, and `Ctrl+b` pages instead of inserting bold. Source/Preview buttons, search focus via keyboard traversal, formatting controls and Editor settings remain reachable. Toolbar actions are one source transaction and participate in Vim undo; exit Visual/Insert to Normal after a toolbar mutation to avoid retaining a stale pending command. Resolve this trade-off explicitly at Q2 rather than quietly breaking either keymap.
+On Linux, `Ctrl+e` in Vim scrolls instead of toggling Preview, `Ctrl+f` pages instead of focusing library search, and `Ctrl+b` pages instead of inserting bold. Source/Preview buttons, search focus via keyboard traversal, formatting controls and Editor settings remain reachable. Toolbar actions are one source transaction and participate in Vim undo; exit Visual/Insert to Normal after a toolbar mutation to avoid retaining a stale pending command. This precedence is approved in Q2; document it rather than quietly breaking either keymap.
 
 ## Architecture recommendation and spike gate
 
@@ -88,6 +88,8 @@ Alternatives considered:
 - CodeMirror is the recommended reuse path, but it replaces the source surface even for Standard users. Dependency footprint, native WebKit behavior and byte/history preservation are mandatory gates, not assumed benefits.
 
 References reviewed for this proposal: [CM6 reference](https://codemirror.net/docs/ref/) (state, transactions, compartments, history and gutters), [Vim extension repository](https://github.com/replit/codemirror-vim). Its documented CM6 integration is evidence of a candidate, **not evidence that Foglio integration works**. No dependency was installed or runtime spike executed for this documentation branch.
+
+See the [system design and C4 views](vim-source-editing-architecture.md) for ownership, transaction flows, lifecycle invariants and spike deliverables. These describe a target architecture, not existing modules.
 
 ### VM-01 spike must prove
 
@@ -106,7 +108,7 @@ Write evidence in proposed `docs/vim-editor-spike.md`. If any preservation/histo
 - Introduce `apps/desktop/src/source-editor.ts` as the owned source-surface adapter: install snapshot, set keybindings/read-only state, focus, selection, transactions, history, mode changes and destruction. Define its actual interface during VM-01; keep dependency APIs out of most of `app.ts`.
 - Introduce `apps/desktop/src/editor-preferences.ts` for typed preference values. Mirror Rust enums in `src-tauri/src/lib.rs` and typed IPC in `api.ts`.
 - Proposed `desktop-editor.json`, alongside appearance settings, stores `keybindings: standard | vim`. Follow existing safe filesystem read/write conventions, not browser localStorage or the notes index. Missing file/field uses Standard; malformed/unsupported values are reported without rewriting the file. Treat writes atomically and prevent overlapping UI requests from persisting stale values.
-- Later extend this same file with `lineNumbersVisible: boolean` and `lineNumberStyle: absolute | relative | hybrid`. Older valid settings without these fields use visible/absolute. Preserve all supported fields when changing one preference. Do not store cursor, transient mode, search text or registers as settings.
+- Later extend this same file with `lineNumbersVisible: boolean` and `lineNumberStyle: absolute | relative`. Older valid settings without these fields use visible/absolute. Preserve all supported fields when changing one preference. Do not store cursor, transient mode, search text or registers as settings.
 - Keep `Editor` as save/conflict owner; add only the lossless transaction/history boundary necessary for CM6. No database migration, CLI change, Markdown reserialization or backend write bypass.
 - Remove obsolete textarea history/gutter code only after equivalent tests pass. Update selectors in native tests to semantic source-editor identifiers and real keyboard actions; do not replace native coverage with fabricated input events.
 
@@ -114,11 +116,11 @@ Write evidence in proposed `docs/vim-editor-spike.md`. If any preservation/histo
 
 Separate delivery **RN-01/RN-02**, after Vim ships; not a prerequisite for Vim and not automatically enabled by it.
 
-Editor settings offer **Show line numbers** and **Numbering: Absolute / Relative / Hybrid**. This separation retains the chosen style while hiding the gutter. Keep defaults visible/absolute. Existing Ctrl/Cmd+L toggles visibility and, once this feature lands, persists that visibility without cycling styles; revert/report on persistence failure.
+Editor settings offer **Show line numbers** and **Numbering: Absolute / Relative**. This separation retains the chosen style while hiding the gutter. Keep defaults visible/absolute. Existing Ctrl/Cmd+L toggles visibility and, once this feature lands, persists that visibility without cycling styles; revert/report on persistence failure.
 
 - Absolute: each logical body's line number.
-- Relative: absolute distance from the active caret line; current line displays `0`.
-- Hybrid: distance on other lines, actual absolute number on current line (Vim `number` + `relativenumber` style).
+- Relative: distance on other lines, actual absolute number on the current line (Vim `number` + `relativenumber` semantics, often called hybrid). The UI calls this **Relative**; there is no separate Hybrid option and no current-line-zero option in scope.
+- Owner acceptance example: a four-line document with the cursor on line 3 displays **`2, 1, 3, 1`** from top to bottom. For one-based line `n` and active line `c`, render `n` when `n === c`, otherwise `abs(n - c)`.
 - Count body lines, excluding frontmatter, matching today's gutter. Empty body is one line; a trailing newline introduces the final empty line. No soft-wrap change in this feature.
 - Use the active selection head, not always the smaller selection offset, including backward Visual/mouse selections. Use the primary selection if the engine exposes more than one; no multi-cursor product feature is added.
 - Update on selection-only transactions (Vim motions, arrows, mouse, search jumps), edits, undo/redo, note installation and external clean reload. Gutter rendering must not dirty the document, schedule saves, create history entries or steal focus. On blur retain the last active line until a new selection is established.
@@ -127,16 +129,16 @@ Editor settings offer **Show line numbers** and **Numbering: Absolute / Relative
 
 ## Delivery plan and acceptance
 
-All tasks below are **open**. Each future implementation PR must link this specification, report phase status, exact tests and native evidence, and explicitly name unmet gates. Use focused stacked PRs for dependent phases; rebase rather than merging main.
+VM-00 is **complete** on the owner’s explicit answers; all implementation and verification tasks remain **open**. Each future implementation PR must link this specification, report phase status, exact tests and native evidence, and explicitly name unmet gates. Use focused stacked PRs for dependent phases; rebase rather than merging main.
 
 | Task | Depends on | Deliverable | Exit gate |
 |---|---|---|---|
-| [ ] VM-00 | — | Resolve Q1–Q3 and record approved/revised Vim defaults here; Q4 may wait for RN-01 | Vim product scope and command/shortcut contract accepted |
+| [x] VM-00 | — | Owner accepted core scope, Vim shortcut priority, bounded Ex commands and absolute-current relative numbering; see decisions below | Product questions resolved; technical spike still required |
 | [ ] VM-01 | VM-00 | Disposable candidate spike and `docs/vim-editor-spike.md` | Every spike gate above demonstrated or implementation blocked |
 | [ ] VM-02 | VM-01 | Shared source adapter, lossless transactions and unified history, initially Standard only | A01, A03, A06–A09; existing editor behaviors preserved |
 | [ ] VM-03 | VM-02 | Persistent preference/IPC, settings UI, Vim keymap, indicator, prompts, dispatcher and bounded Ex hooks | A01–A10; keyboard help documents compatibility/precedence |
 | [ ] VM-04 | VM-03 | Native Vim acceptance, docs, dependency/security review | Full gates below, review of native rendering and accurate limitations |
-| [ ] RN-01 | VM-04, Q4 | Number style/visibility persistence and selection-driven gutter | R01–R04, works in both keymaps |
+| [ ] RN-01 | VM-04 | Number style/visibility persistence and selection-driven gutter | R01–R04, works in both keymaps |
 | [ ] RN-02 | RN-01 | Native gutter acceptance and help/docs | R01–R05 and relevant full regression gates |
 
 ### Vim acceptance scenarios
@@ -158,7 +160,7 @@ All tasks below are **open**. Each future implementation PR must link this speci
 
 | ID | Pass condition and evidence |
 |---|---|
-| R01 | Deterministic pure label tests cover every style at first/middle/last lines, empty document and trailing newline; use the style definitions above as the oracle. |
+| R01 | Deterministic pure label tests cover every style at first/middle/last lines, empty document and trailing newline; use the style definitions above as the oracle. Pin the owner example: four lines, active line 3, Relative labels `2, 1, 3, 1`; current line never displays zero. |
 | R02 | Arrow/Vim/mouse/backward-selection/search/undo moves update labels without text edits, dirty state, history entries or saves. Active head, not anchor, determines the current line. |
 | R03 | Styles/visibility persist across restart and libraries, old settings gain visible/absolute defaults, hide/show retains style, and Vim toggling cannot alter the preference. Persistence failure remains visible and does not claim success. |
 | R04 | Native scrolling and long lines stay aligned; gutter width is stable across cursor movement and digit boundaries; hidden gutter consumes no space. Standard and Vim both pass. |
@@ -190,17 +192,17 @@ Build the native test executable **after** Cargo test commands, from `apps/deskt
 - Native tests must send real WebDriver keyboard actions, inspect on-disk bytes and exercise the production webview. Unit tests/synthetic events alone do not qualify native Vim editing or IME.
 - Report exact test commands, platform/engine/package versions and actual outcomes. A Linux pass is not native macOS verification. Adapt CI to run the new harnesses before closing tasks.
 
-## Questions / approval gates
+## Owner decisions (resolved)
 
-1. **Compatibility scope:** Is the listed core Vim contract sufficient for the first delivery, or are Visual block, macros, named/system clipboard registers or substitution essential from day one? Recommendation: listed core first, extras separately qualified.
-2. **Shortcut ownership:** May Vim own conflicting Control chords while its source editor is focused, with Foglio actions available through controls (and Command chords on macOS)? Recommendation: yes; otherwise “same Vim hotkeys” would be misleading.
-3. **Command-line scope:** Is `:w`, line jumps and clearing search highlighting enough initially, with quit/force-write/path/shell commands explicitly rejected? Recommendation: yes; keep all writes and exits on Foglio's existing guarded paths.
-4. **Relative numbering:** Should selecting Relative show `0` on the current line or its absolute line number? Recommendation: expose both **Relative** (0) and **Hybrid** (absolute current), keep Absolute as the default and let the user choose. The numbering follow-up can wait for this answer without blocking the Vim spike once Q1–Q3 are resolved.
+1. **Q1 — Core scope accepted.** Core motions/operators are sufficient initially; macros, Visual block, named/system clipboard registers and substitution are not first-delivery requirements.
+2. **Q2 — Vim shortcut priority accepted.** Vim owns conflicting Control chords while its source is focused, as specified above.
+3. **Q3 — Bounded command line accepted.** Start with guarded `:w`, line jumps and clearing search highlighting; reject the listed quit/force-write/path/shell commands.
+4. **Q4 — Absolute current line required.** Relative numbering shows distances on other lines and the absolute number on the cursor line. The owner example is `2,1,3,1` with the cursor on line 3. This supersedes the earlier three-style proposal; ship only Absolute and Relative choices.
 
-Global profile scope, Standard default, settings persistence and a separate line-number follow-up are recommendations for approval alongside these questions, not assertions of prior user agreement.
+The owner also requested system-design/architecture/C4 guidance for the implementing agent; see the linked architecture document. Standard default, profile-wide persistence and separate delivery remain the plan’s defaults. No product question above remains open. Dependency selection, raw-history integration and performance qualification remain evidence gates, not approved implementation results.
 
 ## Remote-agent handoff
 
 Branch: `docs/vim-source-editing`. Documentation-only worktree: `../foglio-vim-source-editing`. No feature implementation, dependencies, runtime artifacts or PR belong in this delivery.
 
-Fetch this branch and read this document plus [tasks](../tasks.md), [Phase 5 preservation evidence](../phase5.md), [Phase 6 recovery evidence](../phase6.md) and the current source before starting. If main has advanced, rebase the specifications and reconcile affected symbols/behavior. Record owner answers here, start with VM-01, and carry VM-02 onward in dependent branches/PRs only after the spike gate. Keep RN tasks durable and open until independently verified; completing Vim does not close relative numbering.
+Fetch this branch and read this document plus [tasks](../tasks.md), [Phase 5 preservation evidence](../phase5.md), [Phase 6 recovery evidence](../phase6.md) and the current source before starting. If main has advanced, rebase the specifications and reconcile affected symbols/behavior. Owner answers are recorded above. Start with VM-01, and carry VM-02 onward in dependent branches/PRs only after the spike gate. Keep RN tasks durable and open until independently verified; completing Vim does not close relative numbering.
