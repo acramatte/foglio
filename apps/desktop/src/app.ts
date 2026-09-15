@@ -3,6 +3,7 @@ import {
   type Browse,
   type DesktopState,
   type Note,
+  type UpdateInfo,
   errorText,
   errorCode,
 } from "./api";
@@ -111,6 +112,7 @@ export class App {
   private stopped = false;
   private timer?: ReturnType<typeof setInterval>;
   private readonly status = element("span", "Connecting…", "status");
+  private readonly updateNotice = element("button", "", "update-notice");
   private readonly error = element("div", "", "error");
   private readonly root = element("input");
   private readonly select = element("button", "Open library");
@@ -434,6 +436,7 @@ export class App {
       help,
       this.saveStatus,
       this.status,
+      this.updateNotice,
     );
     host.append(
       header,
@@ -546,11 +549,32 @@ export class App {
       // Theme settings must never block libraries or source editing.
       this.report(error);
     }
+    this.checkForUpdate();
     await this.poll();
     if (!this.stopped)
       this.timer = setInterval(() => {
         void this.poll();
       }, 750);
+  }
+  // A release notice is purely informational: failures stay silent, and the
+  // button simply opens the release page in the user's browser.
+  private checkForUpdate(): void {
+    this.updateNotice.type = "button";
+    this.updateNotice.dataset.testid = "update-notice";
+    this.updateNotice.hidden = true;
+    void this.api
+      .checkUpdate()
+      .then((update: UpdateInfo | null) => {
+        if (!update || this.stopped) return;
+        this.updateNotice.textContent = `Update available: v${update.version}`;
+        this.updateNotice.setAttribute(
+          "aria-label",
+          `Update available: version ${update.version}. Open the release page.`,
+        );
+        this.updateNotice.onclick = () => void this.api.external(update.url);
+        this.updateNotice.hidden = false;
+      })
+      .catch(() => {});
   }
   stop(): void {
     this.stopped = true;

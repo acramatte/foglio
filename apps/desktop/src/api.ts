@@ -47,6 +47,10 @@ export interface Mutation {
   file_committed: boolean;
   warnings: string[];
 }
+export interface UpdateInfo {
+  version: string;
+  url: string;
+}
 export interface Api {
   copy(session: number, path: string, observedRevision: string | null, destination: string, baseSource: string, body: string): Promise<Mutation>;
   save(session: number, path: string, revision: string, body: string): Promise<Mutation>;
@@ -73,6 +77,7 @@ export interface Api {
     target: string,
   ): Promise<{ session: number; path: string }>;
   external(url: string): Promise<void>;
+  checkUpdate(): Promise<UpdateInfo | null>;
 }
 export const api: Api = {
   copy: (session, path, observedRevision, destination, baseSource, body) => invoke("save_note_copy", {session, path, observedRevision, destination, baseSource, body}),
@@ -93,6 +98,7 @@ export const api: Api = {
   resolve: (session, fromPath, target) =>
     invoke("resolve_note_link", { session, fromPath, target }),
   external: (url) => invoke("open_external_link", { url }),
+  checkUpdate: () => invoke("check_update"),
 };
 export function errorCode(error: unknown): string {
   if (typeof error === "string") {try {return errorCode(JSON.parse(error));} catch {return "";}}

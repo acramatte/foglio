@@ -394,6 +394,10 @@ footer button {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+.update-notice {
+  margin-left: auto;
+  font-weight: 600;
+}
 @media (max-height: 600px) {
   .notes .new-note { margin-top: 8px; }
   .notes input { margin-top: 10px; margin-bottom: 8px; }
@@ -615,6 +619,7 @@ nav h3 { margin: 16px 8px 5px; color: var(--muted); letter-spacing: .08em; }
 .diagnostics { padding: 7px 16px; border-color: var(--border); background: var(--sidebar); color: var(--muted); }
 footer { min-height: 30px; padding: 7px 16px; border-color: var(--border); background: var(--sidebar); color: var(--muted); letter-spacing: 0; }
 footer button { color: var(--muted); }
+.update-notice { color: var(--accent); }
 dialog { background: var(--editor); color: var(--text); border-color: var(--border); }
 dialog::backdrop { background: rgb(0 0 0 / .48); }
 dialog input, dialog select { background: var(--list); color: var(--text); border-color: var(--border); }
