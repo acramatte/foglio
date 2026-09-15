@@ -37,6 +37,15 @@ type Shortcut = {
 };
 // "Mod" is the platform's primary accelerator: Command on macOS, Ctrl elsewhere.
 const MODIFIER = "Mod";
+// Creation date/time renders in the viewer's locale and the runtime timezone.
+const CREATED_FORMAT = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+function createdTime(ms: number): HTMLTimeElement {
+  const date = new Date(ms);
+  const when = element("time", CREATED_FORMAT.format(date));
+  when.dateTime = date.toISOString();
+  when.setAttribute("aria-label", "Created");
+  return when;
+}
 export function primaryModifier(): string {
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
   return /mac/i.test(nav.userAgentData?.platform || nav.platform || nav.userAgent) ? "⌘" : "Ctrl";
@@ -1006,10 +1015,10 @@ export class App {
     this.editor?.dispose();this.note=note;this.selected=note.path;
     this.editor=new Editor(note,this.api.save,()=>this.renderEditor(),()=>this.api.open(note.session,note.path));
     this.source.value=note.body;this.sourceHistory.reset();this.renderEditor();
-    this.metadata.replaceChildren(
-      element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" ")),
-      element("small","Body editing preserves frontmatter. Tags are managed separately."),
-    );
+    const metadata:(Node|string)[]=[element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" "))];
+    if (note.created!==null) metadata.push(createdTime(note.created));
+    metadata.push(element("small","Body editing preserves frontmatter. Tags are managed separately."));
+    this.metadata.replaceChildren(...metadata);
     if (preservePosition) this.source.setSelectionRange(start,end);
     this.sourceWrap.scrollTop=preservePosition ? sourceScroll : 0;
     this.previewScroll.scrollTop=preservePosition ? previewScroll : 0;

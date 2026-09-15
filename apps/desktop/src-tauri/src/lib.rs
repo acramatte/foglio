@@ -192,6 +192,19 @@ pub struct Note {
     pub body: String,
     pub source: String,
     pub revision: notes_core::Revision,
+    /// Filesystem birth time in Unix milliseconds; `None` when the filesystem
+    /// does not report a creation time. Never derived from file content.
+    pub created: Option<i64>,
+}
+
+/// Filesystem creation time in Unix milliseconds. `None` means the filesystem
+/// does not report a birth time, not that the note is unknown.
+pub fn created_unix_ms(path: &std::path::Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.created().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
 }
 #[derive(Serialize)]
 pub struct Resolved {
@@ -393,6 +406,7 @@ impl Backend {
         self.with_selection(session, |s| {
             let entry = s.library.get(path).map_err(core_error)?;
             let d = entry.document;
+            let created = created_unix_ms(&s.library.root().join(&entry.path));
             Ok(Note {
                 session,
                 path: entry.path,
@@ -401,6 +415,7 @@ impl Backend {
                 body: d.body,
                 source: d.source,
                 revision: d.revision,
+                created,
             })
         })
     }
@@ -733,5 +748,19 @@ mod mutation_tests {
             );
             assert_eq!(dto.path, "a.md");
         }
+    }
+
+    #[test]
+    fn created_unix_ms_reports_birth_time_and_absence_without_fabrication() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("a.md");
+        assert_eq!(created_unix_ms(&path), None);
+        std::fs::write(&path, b"note").unwrap();
+        let created = created_unix_ms(&path).expect("filesystem reports a birth time");
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+        assert!(created <= now && now - created < 60_000);
     }
 }

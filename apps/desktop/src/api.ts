@@ -39,6 +39,8 @@ export interface Note {
   body: string;
   source: string;
   revision: string;
+  /** Filesystem creation time in Unix milliseconds; null when not reported. */
+  created: number | null;
 }
 export interface Mutation {
   session: number;
