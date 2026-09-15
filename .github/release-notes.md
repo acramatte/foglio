@@ -22,3 +22,10 @@ The v1 release gate is not complete. See the [Phase 7 evidence and open release 
 ## Verification
 
 Each release build runs the locked Rust/frontend checks, constructs the Debian package, and runs the staged native WebKit acceptance harness in hosted CI.
+
+Release assets carry build-provenance attestations: `gh attestation verify <file> --repo acramatte/foglio` proves a file was built by this repository's release workflow.
+
+`SHA256SUMS` lists the checksum of every downloadable artifact and is signed with the release minisign key (`release.txt.minisig` signs `release.txt`, which names the release tag; the desktop app verifies it before showing a signed update notice). Verify a download with:
+
+    minisign -Vm SHA256SUMS -p docs/foglio-release.pub
+    shasum -a 256 -c SHA256SUMS
