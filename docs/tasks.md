@@ -190,6 +190,20 @@ Do not check a box just because code exists. The source brief's illustrative exa
 - [ ] SEARCH-UX-NEXT: separately scoped typo tolerance (“did you mean…”), partial-coverage recovery for queries that match only some words, and highlighting of matched text in titles/snippets. Define the match-kind/span contract and Unicode offset handling before changing the result shape.
 - [ ] Measure the extra bounded prefix query per keystroke against the still-open P7-03 performance budgets; do not claim a latency guarantee from prepared-query numbers.
 
+## Vim source editing and relative line numbers (proposal)
+
+**Status: specifications only; implementation not started.** See [proposal, implementation plan, acceptance and approval questions](specs/vim-source-editing.md). These are scoped desktop-editor follow-ups, not a full Vim runtime or an expansion of the unrelated exclusions below.
+
+- [ ] VM-00: resolve compatibility, shortcut and command-line scope with the owner; record approved defaults in the proposal.
+- [ ] VM-01: spike CodeMirror 6 + Vim in native Tauri/WebKit; gate adoption on byte preservation, unified undo, live switching, command safety and recorded performance evidence.
+- [ ] VM-02: integrate a shared Standard source surface with lossless transaction/history handling; retain existing autosave/conflict/close acceptance.
+- [ ] VM-03: add persistent Standard/Vim settings, modes, motions, bounded command line, shortcut precedence and help.
+- [ ] VM-04: verify required Vim compatibility and native regressions; record evidence and platform limitations before claiming completion.
+- [ ] RN-01 (after VM-04): add independent persistent visibility and Absolute/Relative/Hybrid numbering driven by the active selection head.
+- [ ] RN-02: qualify selection-only updates, persistence, native gutter geometry and large-document behavior in both keymaps.
+
+Dependency details and acceptance IDs live in the linked specification. No task above is complete merely because this planning branch exists.
+
 ## Backlog exclusions
 
 Future features from source §40 remain outside these tasks. Do not open implementation tasks for attachments, AI/MCP, encryption, cloud APIs, daemon IPC, CRDTs, history, or mobile without a scope amendment.
