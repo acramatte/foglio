@@ -92,6 +92,9 @@ def main():
             wait(lambda:js('const e=document.querySelector(arguments[0]);if(!e || e.disabled)return false;e.click();return true',f'[data-note-path="{path}"]'),'listed note clicked '+path)
             wait(lambda:js('return document.querySelector(".metadata").textContent.includes(arguments[0])',path),'note opened '+path)
         def operation(action,value=None,folder=None,cancel=False):
+            if action in ('move-note','delete-note'):
+                click('[data-testid=note-actions-trigger]')
+                wait(lambda:js("return !document.querySelector('[data-testid=note-actions-menu]').hidden"),'note actions menu')
             click(f'[data-testid={action}]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'operation dialog')
             if value is not None: driver.fill('[data-testid=operation-value]',value)
             if folder is not None: driver.fill('[data-testid=operation-folder]',folder)
@@ -167,6 +170,25 @@ def main():
                 operation('delete-note',cancel=True);assert renamed.exists()
                 operation('delete-note');wait(lambda:not renamed.exists(),'confirmed permanent delete')
                 scenarios.append('create/edit/tag/untag/rename/collision/cancel/confirmed deletion')
+                open_note('other.md');context_note=library/'scroll-00.md'
+                def context_delete(cancel=False):
+                    js("document.querySelector('[data-note-path=\"scroll-00.md\"]').scrollIntoView({block:'center'})")
+                    rect=js("const r=document.querySelector('[data-note-path=\"scroll-00.md\"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}")
+                    driver.request('POST',f'/session/{driver.session}/actions',{'actions':[{
+                        'type':'pointer','id':'mouse','parameters':{'pointerType':'mouse'},'actions':[
+                            {'type':'pointerMove','duration':0,'origin':'viewport','x':round(rect['x']),'y':round(rect['y'])},
+                            {'type':'pointerDown','button':2},{'type':'pointerUp','button':2},
+                        ],
+                    }]})
+                    wait(lambda:js("return !document.querySelector('[data-testid=note-context-menu]').hidden"),'note context menu')
+                    assert js("return document.querySelector('.metadata').textContent.includes('other.md')"), 'secondary click changed the selected note'
+                    click('[data-testid=context-delete-note]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'context deletion confirmation')
+                    click('[data-testid=dialog-cancel]' if cancel else '[data-testid=dialog-submit]')
+                    wait(lambda:js("return !document.querySelector('dialog')"),'context deletion dialog closed')
+                context_delete(cancel=True);assert context_note.exists()
+                context_delete();wait(lambda:not context_note.exists(),'right-click deletion committed')
+                assert js("return document.querySelector('.metadata').textContent.includes('other.md')")
+                scenarios.append('right-click delete cancels or removes an unselected note without changing selection')
                 # Navigation saves immediately, even before debounce fires.
                 open_note('preserve.md');click('[data-testid=source-mode]');edit(source()+'navigation tail\n');click('[data-note-path="other.md"]')
                 def navigated_after_flush():

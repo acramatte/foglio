@@ -403,7 +403,7 @@ footer button {
 .editor-tools, .conflict-tools, .format-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 20px; }
 .format-bar { padding-top: 0; }
 .format-bar[hidden] { display: none !important; }
-.editor-tools button, .conflict-tools button, .format-bar button, .new-note, dialog button { border: 1px solid #d4d8ce; border-radius: 5px; padding: 7px 10px; background: #f1f3ed; color: inherit; }
+.editor-tools button, .conflict-tools button, .format-bar button, .new-note, .popup-menu button, dialog button { border: 1px solid #d4d8ce; border-radius: 5px; padding: 7px 10px; background: #f1f3ed; color: inherit; }
 .editor-tools button[aria-pressed="true"] { background: #dfe7db; }
 .format-bar button { min-width: 2.2em; }
 .format-bar button[data-testid="format-bold"] { font-weight: 700; }
@@ -576,11 +576,30 @@ nav h3 { margin: 16px 8px 5px; color: var(--muted); letter-spacing: .08em; }
 .editor-tools .mode-toggle button { border: 0; border-radius: 0; }
 .editor-tools .mode-toggle button[aria-pressed="true"] { background: var(--selected); color: var(--text); }
 .document-overflow { position: relative; }
-.document-overflow summary { cursor: pointer; list-style: none; border: 1px solid var(--border); border-radius: 5px; padding: 7px 9px; font-size: 12px; }
-.document-overflow summary::-webkit-details-marker { display: none; }
-.document-overflow[open] { min-width: 132px; }
-.document-overflow[open] > summary { margin-bottom: 4px; }
-.document-overflow[open] > button { display: block; width: 100%; margin-top: 3px; text-align: left; }
+.editor-tools .note-actions-trigger { width: 32px; padding-inline: 0; font-size: 18px; line-height: 1; }
+.popup-menu {
+  position: fixed;
+  z-index: 20;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--editor);
+  box-shadow: 0 8px 24px rgb(0 0 0 / .18);
+}
+.popup-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 7px 9px;
+  background: transparent;
+  text-align: left;
+  white-space: nowrap;
+}
+.popup-menu button:hover,
+.popup-menu button:focus-visible { background: var(--selected); }
+.popup-menu button[data-testid="delete-note"],
+.popup-menu button[data-testid="context-delete-note"] { color: var(--error); }
 .focus-action { white-space: nowrap; }
 .preview { max-width: 82ch; margin: 0 auto; padding: 32px clamp(24px, 6vw, 88px) 72px; background: var(--editor); color: var(--text); }
 .preview h1, .preview h2, .preview h3 { font-family: inherit; color: var(--text); }
