@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -78,6 +80,40 @@ jobs:
           find target -path '*bundle/dmg/*.dmg' -exec cp {} dist/ \;
           find target -path '*/release/foglio-notes-v*.tar.gz' -exec cp {} dist/ \;
           ls -l dist/
+      - name: Install minisign
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            sudo apt-get update && sudo apt-get install -y minisign
+          else
+            brew install minisign
+          fi
+      - name: Sign the release manifest and checksums
+        env:
+          # Unencrypted release signing key; the private key only ever exists
+          # in this secret and never in the repository.
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        shell: bash
+        run: |
+          key=$(mktemp)
+          printf '%s' "$MINISIGN_SECRET_KEY" > "$key"
+          chmod 600 "$key"
+          trap 'rm -f "$key"' EXIT
+          # The desktop app verifies release.txt against its embedded public
+          # key before showing a signed update notice.
+          printf '%s\n' "$GITHUB_REF_NAME" > dist/release.txt
+          minisign -Sm dist/release.txt -s "$key"
+          # Checksums let users verify any download independently of the app.
+          (cd dist && shasum -a 256 -- *.deb *.dmg *.tar.gz > SHA256SUMS)
+          minisign -Sm dist/SHA256SUMS -s "$key"
+          ls -l dist/
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.deb
+            dist/*.dmg
+            dist/*.tar.gz
       - name: Generate the changes section
         uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
         with:
