@@ -1016,8 +1016,14 @@ export class App {
     this.editor?.dispose();this.note=note;this.selected=note.path;
     this.editor=new Editor(note,this.api.save,()=>this.renderEditor(),()=>this.api.open(note.session,note.path));
     this.source.value=note.body;this.sourceHistory.reset();this.renderEditor();
-    const metadata:(Node|string)[]=[element("span",note.path),element("span",note.tags.map(t=>"#"+t).join(" "))];
-    if (note.first_seen!==null) metadata.push(element("span","First seen"),firstSeenTime(note.first_seen));
+    const identity=element("div",undefined,"note-id");
+    identity.append(element("span",note.path));
+    if (note.first_seen!==null) {
+      const seen=element("span",undefined,"first-seen");
+      seen.append("First seen ",firstSeenTime(note.first_seen));
+      identity.append(seen);
+    }
+    const metadata:(Node|string)[]=[identity,element("span",note.tags.map(t=>"#"+t).join(" "))];
     metadata.push(element("small","Body editing preserves frontmatter. Tags are managed separately."));
     this.metadata.replaceChildren(...metadata);
     if (preservePosition) this.source.setSelectionRange(start,end);

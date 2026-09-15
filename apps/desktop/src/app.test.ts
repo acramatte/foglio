@@ -459,8 +459,11 @@ describe("note first-seen date",()=>{
   const {host}=setup({open:vi.fn(async(_s,path)=>({...note(path),first_seen:FIRST_SEEN}))});
   await app.start();await app.open("a.md");
   const metadata=host.querySelector(".metadata")!;
-  expect(metadata.textContent).toContain("First seen");
-  const when=metadata.querySelector<HTMLTimeElement>("time")!;
+  const identity=metadata.querySelector(".note-id")!;
+  expect(identity.querySelector("span")!.textContent).toBe("a.md");
+  const seen=identity.querySelector(".first-seen")!;
+  expect(seen.textContent).toContain("First seen");
+  const when=seen.querySelector<HTMLTimeElement>("time")!;
   expect(when.dateTime).toBe(new Date(FIRST_SEEN).toISOString());
   expect(when.textContent).toBe(new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(FIRST_SEEN)));
  });
