@@ -566,12 +566,20 @@ export class App {
       .checkUpdate()
       .then((update: UpdateInfo | null) => {
         if (!update || this.stopped) return;
-        this.updateNotice.textContent = `Update available: v${update.version}`;
-        this.updateNotice.setAttribute(
-          "aria-label",
-          `Update available: version ${update.version}. Open the release page.`,
-        );
-        this.updateNotice.onclick = () => void this.api.external(update.url);
+        if (update.signature === "tampered") {
+          // A failed signature means the release cannot be trusted; surface a
+          // warning without a link rather than helping the user reach it.
+          this.updateNotice.textContent = `Update available: v${update.version} — signature verification failed`;
+          this.updateNotice.dataset.state = "tampered";
+          this.updateNotice.onclick = null;
+        } else {
+          this.updateNotice.textContent = `Update available: v${update.version}${update.signature === "verified" ? "" : " (unsigned release)"}`;
+          this.updateNotice.setAttribute(
+            "aria-label",
+            `Update available: version ${update.version}. Open the release page.`,
+          );
+          this.updateNotice.onclick = () => void this.api.external(update.url);
+        }
         this.updateNotice.hidden = false;
       })
       .catch(() => {});

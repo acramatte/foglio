@@ -739,15 +739,36 @@ describe("desktop UI state", () => {
 });
 
 describe("release update notice", () => {
- it("appears for a newer release and opens its release page on click", async() => {
-  const {host,api}=setup({checkUpdate:vi.fn().mockResolvedValue({version:"0.3.0",url:"https://github.com/acramatte/foglio/releases/tag/v0.3.0"})});
+ const releaseUrl="https://github.com/acramatte/foglio/releases/tag/v0.3.0";
+ it("appears for a verified release and opens its release page on click", async() => {
+  const {host,api}=setup({checkUpdate:vi.fn().mockResolvedValue({version:"0.3.0",url:releaseUrl,signature:"verified"})});
   await app.start();
   const notice=host.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!;
   await vi.waitFor(()=>expect(notice.hidden).toBe(false));
   expect(notice.textContent).toBe("Update available: v0.3.0");
   expect(notice.getAttribute("aria-label")).toContain("Open the release page");
   notice.click();
-  await vi.waitFor(()=>expect(api.external).toHaveBeenCalledWith("https://github.com/acramatte/foglio/releases/tag/v0.3.0"));
+  await vi.waitFor(()=>expect(api.external).toHaveBeenCalledWith(releaseUrl));
+ });
+ it("labels an unsigned release but still opens the release page", async() => {
+  const {host,api}=setup({checkUpdate:vi.fn().mockResolvedValue({version:"0.3.0",url:releaseUrl,signature:"unsigned"})});
+  await app.start();
+  const notice=host.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!;
+  await vi.waitFor(()=>expect(notice.hidden).toBe(false));
+  expect(notice.textContent).toBe("Update available: v0.3.0 (unsigned release)");
+  notice.click();
+  await vi.waitFor(()=>expect(api.external).toHaveBeenCalledWith(releaseUrl));
+ });
+ it("warns without a link when the signature does not verify", async() => {
+  const {host,api}=setup({checkUpdate:vi.fn().mockResolvedValue({version:"0.3.0",url:releaseUrl,signature:"tampered"})});
+  await app.start();
+  const notice=host.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!;
+  await vi.waitFor(()=>expect(notice.hidden).toBe(false));
+  expect(notice.textContent).toBe("Update available: v0.3.0 — signature verification failed");
+  expect(notice.dataset.state).toBe("tampered");
+  notice.click();
+  await new Promise(r=>setTimeout(r,20));
+  expect(api.external).not.toHaveBeenCalled();
  });
  it("stays hidden when no update is available or the check fails", async() => {
   const {host}=setup();

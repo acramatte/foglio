@@ -50,6 +50,7 @@ export interface Mutation {
 export interface UpdateInfo {
   version: string;
   url: string;
+  signature: "verified" | "unsigned" | "tampered";
 }
 export interface Api {
   copy(session: number, path: string, observedRevision: string | null, destination: string, baseSource: string, body: string): Promise<Mutation>;
