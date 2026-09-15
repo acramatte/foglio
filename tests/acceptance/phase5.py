@@ -95,7 +95,12 @@ def main():
             click(f'[data-testid={action}]');wait(lambda:js("return !!document.querySelector('dialog[open]')"),'operation dialog')
             if value is not None: driver.fill('[data-testid=operation-value]',value)
             if folder is not None: driver.fill('[data-testid=operation-folder]',folder)
-            click('[data-testid=dialog-cancel]' if cancel else '[data-testid=dialog-submit]')
+            if cancel:
+                click('[data-testid=dialog-cancel]')
+            elif action == 'untag-note':
+                click('[data-testid=remove-tag]')
+            else:
+                click('[data-testid=dialog-submit]')
             wait(lambda:js("return !document.querySelector('dialog')"),'dialog closed')
         with (sandbox/'driver.log').open('w+') as log:
             process=subprocess.Popen(['xvfb-run','-a',DRIVER,'--port',str(dport),'--native-port',str(nport)],env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
