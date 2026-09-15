@@ -97,6 +97,11 @@ def main():
                 created = library / 'Keyboard-fixture.md'
                 wait(lambda: created.exists() and focused('textarea') and js("return !document.querySelector('textarea').readOnly"), 'created and editor focused')
                 assert created.read_text() == '# Keyboard fixture\n'
+                assert js("""const button = action => document.querySelector(`[data-testid=format-${action}]`);
+                    return button('bold').title === 'Bold (Ctrl+B)'
+                      && button('italic').title === 'Italic (Ctrl+I)'
+                      && button('link').title === 'Link (Ctrl+K)'
+                      && button('strike').title === 'Strikethrough';"""), 'formatting toolbar tooltips must include available shortcuts'
                 keys('a', control=True)
                 keys('keyboardneedle body')
                 keys('s', control=True)

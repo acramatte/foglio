@@ -41,12 +41,13 @@ export function primaryModifier(): string {
   const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
   return /mac/i.test(nav.userAgentData?.platform || nav.platform || nav.userAgent) ? "⌘" : "Ctrl";
 }
-const FORMAT_CONTROLS: ReadonlyArray<{ action: FormatAction; label: string; title: string }> = [
-  { action: "bold", label: "B", title: "Bold" },
-  { action: "italic", label: "I", title: "Italic" },
+type FormatControl = { action: FormatAction; label: string; title: string; shortcut?: string };
+const FORMAT_CONTROLS: ReadonlyArray<FormatControl> = [
+  { action: "bold", label: "B", title: "Bold", shortcut: "B" },
+  { action: "italic", label: "I", title: "Italic", shortcut: "I" },
   { action: "strike", label: "S", title: "Strikethrough" },
   { action: "code", label: "</>", title: "Inline code" },
-  { action: "link", label: "Link", title: "Link" },
+  { action: "link", label: "Link", title: "Link", shortcut: "K" },
   { action: "heading", label: "H", title: "Heading" },
   { action: "quote", label: "Quote", title: "Quote" },
   { action: "bullet", label: "List", title: "Bullet list" },
@@ -403,7 +404,8 @@ export class App {
     for (const control of FORMAT_CONTROLS) {
       const button=element("button",control.label);
       button.type="button";
-      button.title=control.title;
+      const shortcut=control.shortcut ? `${primaryModifier()}+${control.shortcut}` : null;
+      button.title=shortcut ? `${control.title} (${shortcut})` : control.title;
       button.setAttribute("aria-label",control.title);
       button.dataset.testid="format-"+control.action;
       button.addEventListener("mousedown",event=>event.preventDefault());
