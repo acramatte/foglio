@@ -104,7 +104,10 @@ jobs:
           printf '%s\n' "$GITHUB_REF_NAME" > dist/release.txt
           minisign -Sm dist/release.txt -s "$key"
           # Checksums let users verify any download independently of the app.
-          (cd dist && shasum -a 256 -- *.deb *.dmg *.tar.gz > SHA256SUMS)
+          # Each platform only has its own artifact kinds, so checksum whatever
+          # exists instead of globbing all three patterns literally.
+          (cd dist && find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.dmg' -o -name '*.tar.gz' \) | sed 's|^\./||' | sort | xargs shasum -a 256 > SHA256SUMS)
+          cat dist/SHA256SUMS
           minisign -Sm dist/SHA256SUMS -s "$key"
           ls -l dist/
       - name: Attest build provenance
