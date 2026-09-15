@@ -58,6 +58,13 @@ def main():
                 keys(TAB)
             raise AssertionError(f'Not keyboard-reachable: {selector}; active=' + str(js('return document.activeElement.outerHTML')))
 
+        def focus_result():
+            for _ in range(3):
+                keys(DOWN)
+                if focused('.note-card'):
+                    return
+            raise AssertionError('Could not focus the first search result; active=' + str(js('return document.activeElement.outerHTML')))
+
         def saved():
             return js("return document.querySelector('[data-testid=save-status]').dataset.state==='clean'")
 
@@ -118,8 +125,7 @@ def main():
                 assert focused('[aria-label="Search notes"]')
                 keys('keyboardneedle')
                 wait(lambda: js("return document.querySelectorAll('.note-card').length===1 && document.querySelector('.note-card').dataset.notePath==='Keyboard-fixture.md'"), 'literal search finds saved body')
-                keys(DOWN)
-                assert focused('.note-card')
+                focus_result()
                 keys(ENTER)
                 wait(lambda: js("return document.querySelector('.metadata').textContent.includes('Keyboard-fixture.md') && !document.querySelector('textarea').readOnly"), 'result opened')
                 keys('e', control=True)
@@ -134,11 +140,18 @@ def main():
                 await_save()
                 assert created.read_text() == 'keyboardneedle edited', {'disk': created.read_text(), 'source': js("return document.querySelector('textarea').value"), 'focus': js('return document.activeElement.outerHTML')}
 
-                tab_to('[data-testid=move-note]')
+                keys('f', control=True)
+                focus_result()
+                wait(lambda: focused('.note-card'), 'search result focused before header actions')
+                tab_to('[data-testid=note-actions-trigger]')
+                keys(ENTER)
+                wait(lambda: focused('[data-testid=move-note]'), 'actions menu opens on Move / rename')
                 keys(ENTER)
                 wait(lambda: focused('[data-testid=operation-value]'), 'move path autofocus')
                 keys(ESCAPE)
-                wait(lambda: focused('[data-testid=move-note]'), 'cancel restores move focus')
+                wait(lambda: focused('[data-testid=note-actions-trigger]'), 'cancel restores actions-menu focus')
+                keys(ENTER)
+                wait(lambda: focused('[data-testid=move-note]'), 'actions menu reopened')
                 keys(ENTER)
                 wait(lambda: focused('[data-testid=operation-value]'), 'move dialog reopened')
                 keys('a', control=True)

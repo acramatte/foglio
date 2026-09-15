@@ -133,6 +133,7 @@ describe("Phase 7 keyboard and accessibility", () => {
  const key=(key:string, extra:KeyboardEventInit={})=>document.activeElement!.dispatchEvent(new KeyboardEvent("keydown",{key,ctrlKey:true,bubbles:true,cancelable:true,...extra}));
  const get=<T extends HTMLElement>(host:HTMLElement,id:string)=>host.querySelector<T>(`[data-testid=${id}]`)!;
  const dialogs=()=>{HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};};
+ const openActions=(host:HTMLElement)=>{const trigger=get<HTMLButtonElement>(host,"note-actions-trigger");trigger.click();return {trigger,menu:get<HTMLElement>(host,"note-actions-menu")};};
  it("focuses existing search, enters results, and retains result focus across refresh",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");get<HTMLButtonElement>(host,"source-mode").click();
   key("f");expect(document.activeElement).toBe(get(host,"search-input"));
@@ -160,8 +161,8 @@ describe("Phase 7 keyboard and accessibility", () => {
   expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Close");
   expect(host.querySelector("[data-testid=dialog-submit]")).toBeNull();
   host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
-  const move=get<HTMLButtonElement>(host,"move-note");move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
-  expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Cancel");
+  const {menu}=openActions(host);const move=get<HTMLButtonElement>(host,"move-note");move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  expect(menu.hidden).toBe(true);expect(host.querySelector("[data-testid=dialog-cancel]")!.textContent).toBe("Cancel");
   expect(host.querySelector("[data-testid=dialog-submit]")!.textContent).toBe("Apply");
  });
  it("renders Command on macOS and Ctrl everywhere else",async()=>{
@@ -180,19 +181,75 @@ describe("Phase 7 keyboard and accessibility", () => {
     expect(linux.caps.filter(cap=>cap==="Ctrl")).toHaveLength(8);expect(linux.caps).not.toContain("⌘");expect(linux.detail).not.toContain("Command");
   } finally {if (original) Object.defineProperty(navigator,"platform",original);}
  });
- it("focuses preview on mode switch and restores move trigger after cancellation",async()=>{
+ it("focuses preview on mode switch and restores the actions trigger after move cancellation",async()=>{
   dialogs();const {host}=setup();await app.start();await app.open("a.md");get<HTMLButtonElement>(host,"source-mode").click();key("e");
   expect(document.activeElement).toBe(host.querySelector(".preview-scroll"));
-  const move=get<HTMLButtonElement>(host,"move-note");move.focus();move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
-  expect(document.activeElement).toBe(get(host,"operation-value"));host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
-  await vi.waitFor(()=>expect(move.disabled).toBe(false));expect(document.activeElement).toBe(move);
+  const {trigger,menu}=openActions(host);expect(menu.hidden).toBe(false);
+  const move=get<HTMLButtonElement>(host,"move-note");move.click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  expect(menu.hidden).toBe(true);expect(document.activeElement).toBe(get(host,"operation-value"));host.querySelector("dialog")!.dispatchEvent(new Event("cancel",{cancelable:true}));
+  await vi.waitFor(()=>expect(trigger.disabled).toBe(false));expect(document.activeElement).toBe(trigger);expect(trigger.getAttribute("aria-expanded")).toBe("false");
  });
- it("opens overflow actions when keyboard focus reaches More",async()=>{
+ it("keeps the note header compact with an accessible actions menu",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
-  const overflow=host.querySelector<HTMLDetailsElement>(".document-overflow")!;
-  const more=overflow.querySelector<HTMLElement>("summary")!;
-  expect(overflow.open).toBe(false);more.focus();
-  expect(overflow.open).toBe(true);expect(get<HTMLButtonElement>(host,"move-note").disabled).toBe(false);
+  expect(host.querySelector(".document-overflow details, .document-overflow summary")).toBeNull();
+  const {trigger,menu}=openActions(host);
+  expect(trigger.textContent).toBe("…");expect(trigger.getAttribute("aria-label")).toBe("Note actions");
+  expect(trigger.getAttribute("aria-haspopup")).toBe("menu");expect(trigger.getAttribute("aria-expanded")).toBe("true");
+  expect(menu.getAttribute("role")).toBe("menu");expect(menu.hidden).toBe(false);
+  expect([...menu.querySelectorAll("[role=menuitem]")].map(item=>item.textContent)).toEqual(["Move / rename","Delete note"]);
+  menu.dispatchEvent(new KeyboardEvent("keydown",{key:"Escape",bubbles:true,cancelable:true}));
+  expect(menu.hidden).toBe(true);expect(trigger.getAttribute("aria-expanded")).toBe("false");expect(document.activeElement).toBe(trigger);
+  trigger.click();get<HTMLButtonElement>(host,"move-note").dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",bubbles:true,cancelable:true}));
+  expect(menu.hidden).toBe(true);expect(document.activeElement).toBe(get(host,"focus-mode"));
+  trigger.focus();trigger.click();get<HTMLButtonElement>(host,"move-note").dispatchEvent(new KeyboardEvent("keydown",{key:"Tab",shiftKey:true,bubbles:true,cancelable:true}));
+  expect(menu.hidden).toBe(true);expect(document.activeElement).toBe(get(host,"tag-note"));
+ });
+ it("deletes an unselected note from its right-click menu only after confirmation",async()=>{
+  dialogs();const {host,api}=setup({delete:vi.fn().mockResolvedValue({session:1,path:"b.md",revision:null,file_committed:true,warnings:[]})});
+  await app.start();await app.open("a.md");
+  const card=host.querySelector<HTMLButtonElement>('[data-note-path="b.md"]')!;
+  const context=new MouseEvent("contextmenu",{clientX:40,clientY:60,bubbles:true,cancelable:true});
+  card.dispatchEvent(context);expect(context.defaultPrevented).toBe(true);
+  const menu=get<HTMLElement>(host,"note-context-menu");
+  expect(menu.hidden).toBe(false);expect(menu.getAttribute("role")).toBe("menu");
+  expect(menu.style.left).toBe("40px");expect(menu.style.top).toBe("60px");
+  card.dispatchEvent(new MouseEvent("click",{button:2,bubbles:true}));expect(api.open).toHaveBeenLastCalledWith(1,"a.md");
+  get<HTMLButtonElement>(host,"context-delete-note").click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog[open]")).not.toBeNull());
+  expect(host.querySelector("#dialog-detail")?.textContent).toContain("b.md");
+  expect(api.open).toHaveBeenCalledWith(1,"b.md");
+  get<HTMLButtonElement>(host,"dialog-cancel").click();
+  await vi.waitFor(()=>expect(card.disabled).toBe(false));expect(api.delete).not.toHaveBeenCalled();expect(document.activeElement).toBe(card);
+  card.dispatchEvent(new MouseEvent("contextmenu",{clientX:40,clientY:60,bubbles:true,cancelable:true}));
+  get<HTMLButtonElement>(host,"context-delete-note").click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog[open]")).not.toBeNull());
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(api.delete).toHaveBeenCalledWith(1,"b.md","hash"));
+  expect(host.querySelector(".metadata")?.textContent).toContain("a.md");
+ });
+ it("retains the target and current selection when a right-click deletion loses its revision race",async()=>{
+  dialogs();const {host,api}=setup({delete:vi.fn().mockRejectedValue({code:"conflict",message:"The note changed while confirmation was open"})});
+  await app.start();await app.open("a.md");
+  const card=host.querySelector<HTMLButtonElement>('[data-note-path="b.md"]')!;
+  card.dispatchEvent(new MouseEvent("contextmenu",{clientX:40,clientY:60,bubbles:true,cancelable:true}));
+  get<HTMLButtonElement>(host,"context-delete-note").click();
+  await vi.waitFor(()=>expect(host.querySelector("dialog[open]")).not.toBeNull());
+  host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
+  await vi.waitFor(()=>expect(host.querySelector<HTMLElement>("[role=alert]")!.textContent).toContain("changed while confirmation was open"));
+  expect(api.delete).toHaveBeenCalledOnce();expect(api.delete).toHaveBeenCalledWith(1,"b.md","hash");
+  expect(host.querySelector('[data-note-path="b.md"]')).not.toBeNull();expect(host.querySelector(".metadata")?.textContent).toContain("a.md");expect(document.activeElement).toBe(card);
+ });
+ it("closes focused-note keyboard context actions when focus or their list anchor changes",async()=>{
+  const {host,api}=setup();await app.start();
+  let card=host.querySelector<HTMLButtonElement>('[data-note-path="b.md"]')!;card.focus();
+  card.dispatchEvent(new KeyboardEvent("keydown",{key:"F10",shiftKey:true,bubbles:true,cancelable:true}));
+  const action=get<HTMLButtonElement>(host,"context-delete-note"), menu=get<HTMLElement>(host,"note-context-menu");
+  expect(document.activeElement).toBe(action);
+  key("f");expect(menu.hidden).toBe(true);expect(document.activeElement).toBe(get(host,"search-input"));
+  card.focus();card.dispatchEvent(new KeyboardEvent("keydown",{key:"ContextMenu",bubbles:true,cancelable:true}));
+  await app.loadList();expect(menu.hidden).toBe(true);
+  action.click();expect(api.delete).not.toHaveBeenCalled();expect(host.querySelector("dialog")).toBeNull();
+  card=host.querySelector<HTMLButtonElement>('[data-note-path="b.md"]')!;expect(document.activeElement).toBe(card);
  });
  it("keeps filter focus and offers an actionable empty-results reset",async()=>{
   const {host}=setup();await app.start();const filter=host.querySelector<HTMLButtonElement>('[data-filter-key="folder:empty"]')!;filter.focus();filter.click();
@@ -219,7 +276,7 @@ describe("Phase 7 keyboard and accessibility", () => {
  it("disables navigation through a mutation acknowledgement, including refreshed cards",async()=>{
   dialogs();const pending=deferred<Awaited<ReturnType<Api["delete"]>>>();
   const {host,api}=setup({delete:vi.fn(()=>pending.promise)});await app.start();await app.open("a.md");
-  get<HTMLButtonElement>(host,"delete-note").click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
+  openActions(host);get<HTMLButtonElement>(host,"delete-note").click();await vi.waitFor(()=>expect(host.querySelector("dialog")).not.toBeNull());
   host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));
   await vi.waitFor(()=>expect(api.delete).toHaveBeenCalled());
   expect(host.querySelector<HTMLButtonElement>(".note-card")!.disabled).toBe(true);

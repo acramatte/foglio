@@ -131,11 +131,32 @@ export class App {
   private readonly metadata = element("div", "", "metadata");
   private readonly diagnostics = element("details", undefined, "diagnostics");
   private readonly count = element("span", "", "count");
+  private readonly noteActionsTrigger = element("button", "…", "note-actions-trigger");
+  private readonly noteActionsMenu = element("div", undefined, "popup-menu note-actions-menu");
+  private readonly contextMenu = element("div", undefined, "popup-menu note-context-menu");
+  private activeMenu: HTMLElement | null = null;
+  private menuOrigin: HTMLElement | null = null;
+  private contextPath: string | null = null;
+  private contextClickGuard: HTMLElement | null = null;
+  private readonly onMenuPointerDown = (event: MouseEvent): void => {
+    const target = event.target as Node | null;
+    if (!this.activeMenu || (target && (this.activeMenu.contains(target) || this.noteActionsTrigger.contains(target)))) return;
+    this.closeMenu();
+  };
+  private readonly onMenuFocusIn = (event: FocusEvent): void => {
+    const target=event.target as Node | null;
+    if (!this.activeMenu || !target || this.activeMenu.contains(target) || target===this.menuOrigin) return;
+    this.closeMenu();
+  };
+  private readonly onMenuViewportChange = (): void => {
+    if (this.activeMenu) this.closeMenu();
+  };
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.defaultPrevented || event.isComposing || event.repeat || event.altKey) return;
     // Native modal focus/Enter/Escape behavior owns input while a choice is open.
     if (this.host.querySelector("dialog[open]")) return;
     if (!(event.ctrlKey || event.metaKey)) return;
+    if (this.activeMenu) this.closeMenu();
     if (event.key.toLowerCase() === "f") {
       event.preventDefault();
       if (this.focusMode) this.setFocusMode(false);
@@ -240,9 +261,15 @@ export class App {
     this.list.addEventListener("keydown", event => {
       if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
       const cards=[...this.list.querySelectorAll<HTMLButtonElement>(".note-card")];
-      const index=cards.indexOf(this.host.ownerDocument.activeElement as HTMLButtonElement);
+      const card=this.host.ownerDocument.activeElement as HTMLButtonElement;
+      const index=cards.indexOf(card);
       if (index < 0) return;
-      if (event.key === "Escape") {event.preventDefault();this.search.focus();}
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+        const rect=card.getBoundingClientRect();
+        this.openContextMenu(card, card.dataset.notePath!, rect.left + 12, rect.top + 12);
+      }
+      else if (event.key === "Escape") {event.preventDefault();this.search.focus();}
       else if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
         event.preventDefault();
         const next=event.key==="Home" ? 0 : event.key==="End" ? cards.length-1 : Math.max(0,Math.min(cards.length-1,index+(event.key==="ArrowDown" ? 1 : -1)));
@@ -306,17 +333,53 @@ export class App {
       const button=element("button",label);button.dataset.testid=action+"-note";
       button.addEventListener("click",()=>{void this.mutate(action,button);});this.tools.append(button);
     }
-    const overflow=element("details",undefined,"document-overflow");
-    const summary=element("summary","More");summary.setAttribute("aria-label","More note actions");
-    // A closed <details> excludes its actions from sequential keyboard focus.
-    // Open it as keyboard focus reaches the summary so Move and Delete remain
-    // reachable without requiring a pointer click first.
-    summary.addEventListener("focus",()=>{overflow.open=true;});
-    overflow.append(summary);
+    const overflow=element("div",undefined,"document-overflow");
+    this.noteActionsTrigger.type="button";
+    this.noteActionsTrigger.dataset.testid="note-actions-trigger";
+    this.noteActionsTrigger.setAttribute("aria-label","Note actions");
+    this.noteActionsTrigger.setAttribute("aria-haspopup","menu");
+    this.noteActionsTrigger.setAttribute("aria-expanded","false");
+    this.noteActionsTrigger.setAttribute("aria-controls","note-actions-menu");
+    this.noteActionsTrigger.addEventListener("click",()=>{
+      if (this.activeMenu===this.noteActionsMenu) this.closeMenu(true);
+      else {
+        const rect=this.noteActionsTrigger.getBoundingClientRect();
+        this.openMenu(this.noteActionsMenu,this.noteActionsTrigger,rect.left,rect.bottom+4);
+      }
+    });
+    this.noteActionsTrigger.addEventListener("keydown",event=>{
+      if (event.key!=="ArrowDown") return;
+      event.preventDefault();
+      const rect=this.noteActionsTrigger.getBoundingClientRect();
+      this.openMenu(this.noteActionsMenu,this.noteActionsTrigger,rect.left,rect.bottom+4);
+    });
+    this.noteActionsMenu.id="note-actions-menu";
+    this.noteActionsMenu.dataset.testid="note-actions-menu";
+    this.noteActionsMenu.setAttribute("role","menu");
+    this.noteActionsMenu.setAttribute("aria-label","Note actions");
+    this.noteActionsMenu.hidden=true;
     for (const [action,label] of [["move","Move / rename"],["delete","Delete note"]] as const) {
-      const button=element("button",label);button.dataset.testid=action+"-note";
-      button.addEventListener("click",()=>{void this.mutate(action);});overflow.append(button);
+      const button=element("button",label);button.type="button";button.setAttribute("role","menuitem");button.dataset.testid=action+"-note";
+      button.addEventListener("click",()=>{
+        this.closeMenu(true);
+        if (action==="delete") {if (this.editor) void this.deleteNote(this.editor.path);}
+        else void this.mutate(action);
+      });
+      this.noteActionsMenu.append(button);
     }
+    this.bindMenu(this.noteActionsMenu);
+    overflow.append(this.noteActionsTrigger,this.noteActionsMenu);
+    this.contextMenu.dataset.testid="note-context-menu";
+    this.contextMenu.setAttribute("role","menu");
+    this.contextMenu.setAttribute("aria-label","Note actions");
+    this.contextMenu.hidden=true;
+    const contextDelete=element("button","Delete note");contextDelete.type="button";contextDelete.setAttribute("role","menuitem");contextDelete.dataset.testid="context-delete-note";
+    contextDelete.addEventListener("click",()=>{
+      const path=this.contextPath;
+      this.closeMenu(true);
+      if (path) void this.deleteNote(path);
+    });
+    this.contextMenu.append(contextDelete);this.bindMenu(this.contextMenu);
     this.focus.type="button";this.focus.dataset.testid="focus-mode";
     this.focus.addEventListener("click",()=>this.setFocusMode(!this.focusMode));
     this.tools.append(overflow,this.focus);
@@ -351,6 +414,10 @@ export class App {
     readerHeader.append(this.metadata,this.tools);
     reader.append(readerHeader, this.formatBar, this.saveError, this.retry, this.resolution, this.sourceWrap, this.previewScroll, this.wordCount);
     this.host.ownerDocument.addEventListener("keydown", this.onKeyDown);
+    this.host.ownerDocument.addEventListener("mousedown", this.onMenuPointerDown);
+    this.host.ownerDocument.addEventListener("focusin", this.onMenuFocusIn);
+    this.host.ownerDocument.addEventListener("scroll", this.onMenuViewportChange, true);
+    this.host.ownerDocument.defaultView?.addEventListener("resize", this.onMenuViewportChange);
     this.renderEditor();
     workspace.append(sidebar, middle, reader);
     this.diagnostics.dataset.testid = "diagnostics";
@@ -374,6 +441,7 @@ export class App {
       workspace,
       this.diagnostics,
       footer,
+      this.contextMenu,
     );
     this.empty(
       "Open your library",
@@ -421,6 +489,56 @@ export class App {
     this.focus.textContent = enabled ? "Exit focus" : "Focus";
     this.focus.setAttribute("aria-pressed", String(enabled));
   }
+  private bindMenu(menu: HTMLElement): void {
+    menu.addEventListener("keydown",event=>{
+      const items=[...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')];
+      const index=items.indexOf(this.host.ownerDocument.activeElement as HTMLButtonElement);
+      if (event.key==="Escape") {event.preventDefault();this.closeMenu(true);return;}
+      if (event.key==="Tab") {
+        event.preventDefault();
+        const origin=this.menuOrigin;
+        this.closeMenu();
+        this.focusAdjacentTo(origin,event.shiftKey);
+        return;
+      }
+      if (!["ArrowDown","ArrowUp","Home","End"].includes(event.key) || !items.length) return;
+      event.preventDefault();
+      const next=event.key==="Home" ? 0 : event.key==="End" ? items.length-1
+        : (index+(event.key==="ArrowDown" ? 1 : -1)+items.length)%items.length;
+      items[next]?.focus();
+    });
+  }
+  private focusAdjacentTo(origin: HTMLElement | null, backward: boolean): void {
+    if (!origin) return;
+    const controls=[...this.host.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter(control=>!control.closest("[hidden]") && control.getAttribute("aria-hidden")!=="true");
+    const index=controls.indexOf(origin);
+    if (index<0 || !controls.length) {if (origin.isConnected) origin.focus();return;}
+    controls[(index+(backward ? -1 : 1)+controls.length)%controls.length]?.focus();
+  }
+  private openMenu(menu: HTMLElement, origin: HTMLElement, left: number, top: number): void {
+    this.closeMenu();
+    this.activeMenu=menu;this.menuOrigin=origin;menu.hidden=false;
+    if (menu===this.noteActionsMenu) this.noteActionsTrigger.setAttribute("aria-expanded","true");
+    const view=this.host.ownerDocument.defaultView;
+    const bounds=menu.getBoundingClientRect();
+    const width=view?.innerWidth ?? 0, height=view?.innerHeight ?? 0;
+    const x=width ? Math.max(4,Math.min(left,width-bounds.width-4)) : left;
+    const y=height ? Math.max(4,Math.min(top,height-bounds.height-4)) : top;
+    menu.style.left=x+"px";menu.style.top=y+"px";
+    menu.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus();
+  }
+  private closeMenu(restoreFocus = false): void {
+    const origin=this.menuOrigin;
+    this.noteActionsMenu.hidden=true;this.contextMenu.hidden=true;
+    this.noteActionsTrigger.setAttribute("aria-expanded","false");
+    this.activeMenu=null;this.menuOrigin=null;this.contextPath=null;this.contextClickGuard=null;
+    if (restoreFocus && origin?.isConnected) origin.focus();
+  }
+  private openContextMenu(origin: HTMLElement, path: string, left: number, top: number): void {
+    if (this.busy || this.selecting || !this.state?.root) return;
+    this.openMenu(this.contextMenu,origin,left,top);this.contextPath=path;this.contextClickGuard=origin;
+  }
   async start(): Promise<void> {
     try {
       await this.initializeAppearance();
@@ -438,6 +556,11 @@ export class App {
     this.stopped = true;
     this.appearanceMedia?.removeEventListener?.("change", this.onAppearanceChange);
     this.host.ownerDocument.removeEventListener("keydown", this.onKeyDown);
+    this.host.ownerDocument.removeEventListener("mousedown", this.onMenuPointerDown);
+    this.host.ownerDocument.removeEventListener("focusin", this.onMenuFocusIn);
+    this.host.ownerDocument.removeEventListener("scroll", this.onMenuViewportChange, true);
+    this.host.ownerDocument.defaultView?.removeEventListener("resize", this.onMenuViewportChange);
+    this.closeMenu();
     this.editor?.dispose();
     clearInterval(this.timer);
     this.epoch++;
@@ -701,7 +824,11 @@ export class App {
       session = this.state.session;
     const query = this.search.value.trim();
     const focused=this.host.ownerDocument.activeElement as HTMLElement | null;
-    const focusedPath=this.list.contains(focused) ? focused?.dataset.notePath : undefined;
+    const focusedInContextMenu=this.activeMenu===this.contextMenu && !!focused && this.contextMenu.contains(focused);
+    const menuPath=this.activeMenu===this.contextMenu && this.menuOrigin && this.list.contains(this.menuOrigin)
+      ? this.menuOrigin.dataset.notePath : undefined;
+    const focusedPath=this.list.contains(focused) ? focused?.dataset.notePath : menuPath;
+    if (this.activeMenu===this.contextMenu) this.closeMenu();
     this.count.textContent = "Loading…";
     this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     try {
@@ -744,8 +871,14 @@ export class App {
           element("span", row.path, "note-path"),
         );
         if (row.snippet) b.append(element("span", row.snippet, "snippet"));
-        b.addEventListener("click", () => {
+        b.addEventListener("click", event => {
+          if (this.contextClickGuard===b) {this.contextClickGuard=null;return;}
+          if (event.button!==0) return;
           void this.open(row.path);
+        });
+        b.addEventListener("contextmenu",event=>{
+          event.preventDefault();
+          this.openContextMenu(b,row.path,event.clientX,event.clientY);
         });
         this.list.append(b);
       }
@@ -765,7 +898,8 @@ export class App {
         this.list.append(clear);
       }
       // Do not steal focus if the user left results while the read was pending.
-      if (focusedPath && this.host.ownerDocument.activeElement === this.host.ownerDocument.body) {
+      const active=this.host.ownerDocument.activeElement;
+      if (focusedPath && (active===this.host.ownerDocument.body || (focusedInContextMenu && this.contextMenu.contains(active)))) {
         const card=[...this.list.querySelectorAll<HTMLButtonElement>(".note-card")].find(b=>b.dataset.notePath===focusedPath);
         (card ?? this.search).focus();
       }
@@ -1118,7 +1252,7 @@ export class App {
       const first=controls[0];if (first) {first.focus();if (first instanceof HTMLInputElement) first.select();} else cancel.focus();
     });
   }
-  private async mutate(action: "create" | "move" | "tag" | "untag" | "delete", origin: HTMLElement | null = this.host.ownerDocument.activeElement as HTMLElement | null): Promise<void> {
+  private async mutate(action: "create" | "move" | "tag" | "untag", origin: HTMLElement | null = this.host.ownerDocument.activeElement as HTMLElement | null): Promise<void> {
     if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor) || (action==="untag" && !this.note?.tags.length)) return;
     this.busy=true;this.renderEditor();this.error.hidden=true;
     try {
@@ -1126,11 +1260,9 @@ export class App {
         await this.dialog("Unsaved changes", "Operation cancelled. Your source is retained; resolve the save error first.");return;
       }
       const editor=this.editor, session=this.state.session;
-      const values=action==="delete"
-        ? await this.dialog("Permanently delete note?",`Delete ${editor!.path} from disk? There is no undo.`,undefined,true)
-        : action==="untag"
-          ? await this.removeTagDialog(this.note!.tags)
-          : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":"Add tag",
+      const values=action==="untag"
+        ? await this.removeTagDialog(this.note!.tags)
+        : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":"Add tag",
           action==="create" ? "The title determines the Markdown filename. Choose a folder inside your library, or leave it blank for the library root. Existing files will never be overwritten."
             : action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten."
             : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
@@ -1141,13 +1273,11 @@ export class App {
       const value=values[0] ?? "";
       const result=action==="create" ? await this.api.create(session,value,values[1] || null,"",[])
         : action==="move" ? await this.api.move(session,editor!.path,editor!.revision,value)
-        : action==="delete" ? await this.api.delete(session,editor!.path,editor!.revision)
         : await this.api.tag(session,editor!.path,editor!.revision,value,action==="tag");
       if (result.session!==session || !result.file_committed) throw new Error("Invalid mutation acknowledgement");
       this.editor?.dispose();this.editor=null;this.note=null;this.selected=null;this.noteRequest++;
       this.renderEditor();
-      if (action==="delete") this.empty("Note deleted", "The selected file was permanently removed.");
-      else {await this.readNote(result.path);if (action==="create") this.setMode("source");}
+      await this.readNote(result.path);if (action==="create") this.setMode("source");
       if (result.warnings.length) this.report("File committed. "+result.warnings.join("\n"));
       if (this.state) this.state={...this.state,generation:-1};
     } catch(error) {this.report(error);} finally {
@@ -1156,6 +1286,37 @@ export class App {
       if (!active || !active.isConnected || active===this.host.ownerDocument.body || active===origin) {
         if (origin?.isConnected && (!(origin instanceof HTMLButtonElement) || !origin.disabled)) origin.focus();
         else if (action==="untag") this.tools.querySelector<HTMLButtonElement>("[data-testid=tag-note]")?.focus();
+      }
+    }
+    void this.poll();
+  }
+  private async deleteNote(path: string): Promise<void> {
+    if (this.busy || this.selecting || !this.state?.root) return;
+    const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
+    this.busy=true;this.renderEditor();this.error.hidden=true;
+    try {
+      if (await this.editor?.flush() === false) {
+        await this.dialog("Unsaved changes", "Operation cancelled. Your source is retained; resolve the save error first.");return;
+      }
+      const session=this.state.session;
+      const target=this.editor?.path===path ? this.editor : await this.api.open(session,path);
+      if (!target || target.session!==session || target.path!==path) throw new Error("Invalid note snapshot");
+      const confirmed=await this.dialog("Permanently delete note?",`Delete ${path} from disk? There is no undo.`,undefined,true);
+      if (confirmed===null) return;
+      const result=await this.api.delete(session,path,target.revision);
+      if (result.session!==session || result.path!==path || result.revision!==null || !result.file_committed) throw new Error("Invalid deletion acknowledgement");
+      if (this.editor?.path===path) {
+        this.editor.dispose();this.editor=null;this.note=null;this.selected=null;this.noteRequest++;
+        this.renderEditor();this.empty("Note deleted", "The selected file was permanently removed.");
+      }
+      if (result.warnings.length) this.report("File committed. "+result.warnings.join("\n"));
+      if (this.state) this.state={...this.state,generation:-1};
+    } catch(error) {this.report(error);} finally {
+      this.busy=false;this.renderEditor();
+      const active=this.host.ownerDocument.activeElement;
+      if (!active || !active.isConnected || active===this.host.ownerDocument.body || active===origin) {
+        if (origin?.isConnected && (!(origin instanceof HTMLButtonElement) || !origin.disabled)) origin.focus();
+        else (this.list.querySelector<HTMLButtonElement>(".note-card:not(:disabled)") ?? this.search).focus();
       }
     }
     void this.poll();
