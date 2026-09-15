@@ -1,5 +1,11 @@
 use super::*;
 use tauri::{Emitter, Manager, State};
+use update::{LATEST_RELEASE_URL, UpdateInfo};
+
+#[tauri::command]
+async fn check_update() -> Result<Option<UpdateInfo>> {
+    blocking(|| update::latest_release(LATEST_RELEASE_URL, env!("CARGO_PKG_VERSION"))).await
+}
 
 #[derive(Default)]
 struct CloseState {
@@ -216,7 +222,8 @@ pub fn run() {
             change_tag,
             finish_close,
             resolve_note_link,
-            open_external_link
+            open_external_link,
+            check_update
         ])
         .build(tauri::generate_context!())
         .expect("build Foglio desktop");

@@ -21,6 +21,7 @@ tauri = { version = "=2.11.5", features = [] }
 url = "=2.5.8"
 percent-encoding = "=2.3.2"
 open = "=5.4.3"
+ureq = { version = "=2.10.1", features = ["json"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -9,7 +9,7 @@ function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promi
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
 function setup(overrides:Partial<Api> = {}) {
- const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),appearance:vi.fn().mockResolvedValue("system"),setAppearance:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),...overrides};
+ const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),appearance:vi.fn().mockResolvedValue("system"),setAppearance:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),checkUpdate:vi.fn().mockResolvedValue(null),...overrides};
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
 describe("Phase 6 conflict choices",()=>{
@@ -735,5 +735,26 @@ describe("desktop UI state", () => {
    const {host,api}=setup();await app.start();expect(document.documentElement.dataset.appearance).toBe("light");media.matches=true;listener?.({} as MediaQueryListEvent);expect(document.documentElement.dataset.appearance).toBe("dark");
    HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};host.querySelector<HTMLButtonElement>("[data-testid=appearance-settings]")!.click();host.querySelector<HTMLSelectElement>("[data-testid=appearance-preference]")!.value="light";host.querySelector("dialog form")!.dispatchEvent(new Event("submit",{cancelable:true}));await vi.waitFor(()=>expect(api.setAppearance).toHaveBeenCalledWith("light"));media.matches=true;listener?.({} as MediaQueryListEvent);expect(document.documentElement.dataset.appearance).toBe("light");
   } finally { if (original) Object.defineProperty(window,"matchMedia",original); else delete (window as {matchMedia?: unknown}).matchMedia; }
+ });
+});
+
+describe("release update notice", () => {
+ it("appears for a newer release and opens its release page on click", async() => {
+  const {host,api}=setup({checkUpdate:vi.fn().mockResolvedValue({version:"0.3.0",url:"https://github.com/acramatte/foglio/releases/tag/v0.3.0"})});
+  await app.start();
+  const notice=host.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!;
+  await vi.waitFor(()=>expect(notice.hidden).toBe(false));
+  expect(notice.textContent).toBe("Update available: v0.3.0");
+  expect(notice.getAttribute("aria-label")).toContain("Open the release page");
+  notice.click();
+  await vi.waitFor(()=>expect(api.external).toHaveBeenCalledWith("https://github.com/acramatte/foglio/releases/tag/v0.3.0"));
+ });
+ it("stays hidden when no update is available or the check fails", async() => {
+  const {host}=setup();
+  await app.start();await new Promise(r=>setTimeout(r,20));
+  expect(host.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!.hidden).toBe(true);
+  const {host:failed}=setup({checkUpdate:vi.fn().mockRejectedValue({code:"network",message:"offline"})});
+  await app.start();await new Promise(r=>setTimeout(r,20));
+  expect(failed.querySelector<HTMLButtonElement>("[data-testid=update-notice]")!.hidden).toBe(true);
  });
 });

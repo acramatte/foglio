@@ -687,6 +687,7 @@ pub fn external_url(input: &str) -> Result<url::Url> {
 }
 
 mod commands;
+mod update;
 pub use commands::run;
 
 #[cfg(test)]
