@@ -304,7 +304,7 @@ export class App {
     this.tools.append(modeToggle);
     for (const [action,label] of [["tag","Add tag"],["untag","Remove tag"]] as const) {
       const button=element("button",label);button.dataset.testid=action+"-note";
-      button.addEventListener("click",()=>{void this.mutate(action);});this.tools.append(button);
+      button.addEventListener("click",()=>{void this.mutate(action,button);});this.tools.append(button);
     }
     const overflow=element("details",undefined,"document-overflow");
     const summary=element("summary","More");summary.setAttribute("aria-label","More note actions");
@@ -1064,6 +1064,31 @@ export class App {
     form.append(heading,description,shortcuts,close);dialog.append(form);
     this.host.append(dialog);dialog.showModal();close.focus();
   }
+  private removeTagDialog(tags: readonly string[]): Promise<string[] | null> {
+    return new Promise(resolve=>{
+      const dialog=element("dialog",undefined,"remove-tag-dialog");dialog.dataset.testid="operation-dialog";
+      const form=element("form");form.method="dialog";
+      const heading=element("h2","Remove tag");heading.id="dialog-heading";dialog.setAttribute("aria-labelledby",heading.id);
+      const description=element("p","Select a tag below to remove it from this note. Other frontmatter and the body stay unchanged.");
+      description.id="dialog-detail";dialog.setAttribute("aria-describedby",description.id);
+      const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
+      const tagsList=element("ul",undefined,"tag-removal-list");
+      const finish=(value:string[]|null)=>{dialog.close();dialog.remove();if (origin?.isConnected) origin.focus();resolve(value);};
+      for (const tag of tags) {
+        const item=element("li");
+        const remove=element("button",undefined,"remove-tag-pill");remove.type="button";remove.dataset.testid="remove-tag";
+        remove.setAttribute("aria-label",`Remove tag ${tag}`);
+        const name=element("span",tag,"remove-tag-name");
+        const icon=element("span","×","remove-tag-x");icon.setAttribute("aria-hidden","true");
+        remove.append(name,icon);remove.addEventListener("click",()=>finish([tag]));item.append(remove);tagsList.append(item);
+      }
+      const cancel=element("button","Cancel");cancel.type="button";cancel.dataset.testid="dialog-cancel";
+      cancel.addEventListener("click",()=>finish(null));
+      dialog.addEventListener("cancel",event=>{event.preventDefault();finish(null);});
+      form.append(heading,description,tagsList,cancel);dialog.append(form);this.host.append(dialog);dialog.showModal();
+      tagsList.querySelector<HTMLButtonElement>("button")?.focus();
+    });
+  }
   private dialog(title: string, detail: string, fields?: DialogField[], destructive: boolean | string = false): Promise<string[] | null> {
     return new Promise(resolve=>{
       const dialog=element("dialog");dialog.dataset.testid="operation-dialog";
@@ -1093,9 +1118,8 @@ export class App {
       const first=controls[0];if (first) {first.focus();if (first instanceof HTMLInputElement) first.select();} else cancel.focus();
     });
   }
-  private async mutate(action: "create" | "move" | "tag" | "untag" | "delete"): Promise<void> {
+  private async mutate(action: "create" | "move" | "tag" | "untag" | "delete", origin: HTMLElement | null = this.host.ownerDocument.activeElement as HTMLElement | null): Promise<void> {
     if (this.busy || this.selecting || !this.state?.root || (action!=="create" && !this.editor) || (action==="untag" && !this.note?.tags.length)) return;
-    const origin=this.host.ownerDocument.activeElement as HTMLElement | null;
     this.busy=true;this.renderEditor();this.error.hidden=true;
     try {
       if (await this.editor?.flush() === false) {
@@ -1104,16 +1128,15 @@ export class App {
       const editor=this.editor, session=this.state.session;
       const values=action==="delete"
         ? await this.dialog("Permanently delete note?",`Delete ${editor!.path} from disk? There is no undo.`,undefined,true)
-        : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":action==="tag"?"Add tag":"Remove tag",
+        : action==="untag"
+          ? await this.removeTagDialog(this.note!.tags)
+          : await this.dialog(action==="create"?"New note":action==="move"?"Move / rename note":"Add tag",
           action==="create" ? "The title determines the Markdown filename. Choose a folder inside your library, or leave it blank for the library root. Existing files will never be overwritten."
             : action==="move" ? "Use a complete library-relative .md path. Existing files will never be overwritten."
-            : action==="untag" ? "Choose a tag currently attached to this note. Other frontmatter and the body stay unchanged."
             : "Tags are case-sensitive. Other frontmatter and the body stay unchanged.",
           action==="create"
             ? [{label:"Note title",value:""},{label:"Folder (optional)",value:"",required:false,testid:"operation-folder",placeholder:"For example blog or blog/engineering"}]
-            : action==="untag"
-              ? [{label:"Tag",value:this.note!.tags[0]!,options:this.note!.tags}]
-              : [{label:action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""}]);
+            : [{label:action==="move" ? "Note path" : "Tag",value:action==="move"?editor!.path:""}]);
       if (values===null) return;
       const value=values[0] ?? "";
       const result=action==="create" ? await this.api.create(session,value,values[1] || null,"",[])
@@ -1129,7 +1152,11 @@ export class App {
       if (this.state) this.state={...this.state,generation:-1};
     } catch(error) {this.report(error);} finally {
       this.busy=false;this.renderEditor();
-      if (origin?.isConnected && (this.host.ownerDocument.activeElement===this.host.ownerDocument.body || this.host.ownerDocument.activeElement===origin)) origin.focus();
+      const active=this.host.ownerDocument.activeElement;
+      if (!active || !active.isConnected || active===this.host.ownerDocument.body || active===origin) {
+        if (origin?.isConnected && (!(origin instanceof HTMLButtonElement) || !origin.disabled)) origin.focus();
+        else if (action==="untag") this.tools.querySelector<HTMLButtonElement>("[data-testid=tag-note]")?.focus();
+      }
     }
     void this.poll();
   }
