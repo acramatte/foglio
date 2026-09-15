@@ -57,7 +57,7 @@ fn connect(path: &Path) -> rusqlite::Result<Connection> {
     let probe = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     probe.busy_timeout(Duration::from_millis(250))?;
     let version: i64 = probe.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-    if !(0..=2).contains(&version) {
+    if !(0..=3).contains(&version) {
         return Err(rusqlite::Error::InvalidQuery);
     }
     drop(probe);
@@ -115,8 +115,15 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
         if version == 0 {
             conn.execute_batch("BEGIN IMMEDIATE;")?;
             conn.execute_batch(include_str!("../migrations/002_index.sql"))?;
+            conn.execute_batch(include_str!("../migrations/003_first_seen.sql"))?;
             conn.execute_batch("COMMIT;")?;
-        } else if version != 2 {
+        } else if version == 2 {
+            // In-place upgrade: first-seen evidence starts empty; every found
+            // file's current birth time is recorded by the next reconciliation.
+            conn.execute_batch("BEGIN IMMEDIATE;")?;
+            conn.execute_batch(include_str!("../migrations/003_first_seen.sql"))?;
+            conn.execute_batch("COMMIT;")?;
+        } else if version != 3 {
             return Err(rusqlite::Error::InvalidQuery);
         }
         conn.prepare(
@@ -175,6 +182,8 @@ struct Scan<'a> {
     root: &'a Path,
     old: &'a HashMap<String, Cached>,
     found: HashMap<String, Cached>,
+    /// Current filesystem birth time per found file, for first-seen evidence.
+    birth: HashMap<String, i64>,
     unknown: Vec<String>,
     force: bool,
     status: IndexStatus,
@@ -245,6 +254,14 @@ impl Scan<'_> {
                 }
                 filesystem::relative(&rel)?;
                 self.status.discovered_notes += 1;
+                if let Some(born) = m
+                    .created()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .and_then(|d| i64::try_from(d.as_millis()).ok())
+                {
+                    self.birth.insert(rel.clone(), born);
+                }
                 let fp = fingerprint(&m);
                 if !self.force
                     && let Some(old) = self.old.get(&rel)
@@ -367,6 +384,7 @@ impl Library {
             root: self.root(),
             old: &old,
             found: HashMap::new(),
+            birth: HashMap::new(),
             unknown: Vec::new(),
             force: force || cache_rebuilt,
             status: IndexStatus {
@@ -399,6 +417,7 @@ impl Library {
             // Empty FTS first: notes_delete looks up an UNINDEXED path. Leaving
             // FTS populated while deleting every note makes a rebuild quadratic.
             // Both clears remain in this transaction; rollback restores all tables.
+            // first_seen is deliberately preserved: it is not derivable from files.
             tx.execute_batch("DELETE FROM notes_fts; DELETE FROM notes; DELETE FROM files;")
                 .map_err(db_error)?;
         }
@@ -459,6 +478,18 @@ impl Library {
                 .map_err(db_error)?;
             }
         }
+        // First-seen evidence: keep the earliest birth time ever observed for a
+        // path. Ordinary saves replace the inode, so the current birth time can
+        // only move forward; a restore from backup legitimately moves it back.
+        for (path, born) in &scan.birth {
+            tx.execute(
+                "INSERT INTO first_seen(path,created_ms) VALUES(?1,?2)
+                 ON CONFLICT(path) DO UPDATE SET created_ms=excluded.created_ms
+                 WHERE excluded.created_ms < first_seen.created_ms",
+                params![path, born],
+            )
+            .map_err(db_error)?;
+        }
         tx.commit().map_err(db_error)?;
         scan.status.indexed_notes = eligible.len();
         scan.status.incomplete = !scan.status.diagnostics.is_empty();
@@ -468,6 +499,31 @@ impl Library {
                 .then(a.code.as_str().cmp(b.code.as_str()))
         });
         Ok((conn, scan.status))
+    }
+    /// The earliest filesystem birth time ever recorded for this library path,
+    /// in Unix milliseconds. A note the library has not yet reconciled falls
+    /// back to its current birth time at the call site. Read-only and
+    /// best-effort: a busy or missing cache yields `None`, never a fabricated
+    /// date.
+    pub fn first_seen_created_ms(&self, path: &str) -> Option<i64> {
+        let conn = Connection::open_with_flags(
+            self.cache_path().ok()?,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .ok()?;
+        conn.busy_timeout(Duration::from_millis(250)).ok()?;
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |r| r.get(0))
+            .ok()?;
+        if version != 3 {
+            return None;
+        }
+        conn.query_row(
+            "SELECT created_ms FROM first_seen WHERE path=?1",
+            [path],
+            |r| r.get(0),
+        )
+        .ok()
     }
     /// Capture body-free identities from the exact committed index generation.
     /// The connection is closed before releasing the cooperative lock.

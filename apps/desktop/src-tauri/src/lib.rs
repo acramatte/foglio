@@ -192,9 +192,11 @@ pub struct Note {
     pub body: String,
     pub source: String,
     pub revision: notes_core::Revision,
-    /// Filesystem birth time in Unix milliseconds; `None` when the filesystem
-    /// does not report a creation time. Never derived from file content.
-    pub created: Option<i64>,
+    /// Earliest filesystem birth time ever recorded for this path, in Unix
+    /// milliseconds; `None` when neither the first-seen index nor the
+    /// filesystem reports one. Ordinary saves replace the file's inode, so
+    /// this is "first seen", not the note's true creation date.
+    pub first_seen: Option<i64>,
 }
 
 /// Filesystem creation time in Unix milliseconds. `None` means the filesystem
@@ -406,7 +408,10 @@ impl Backend {
         self.with_selection(session, |s| {
             let entry = s.library.get(path).map_err(core_error)?;
             let d = entry.document;
-            let created = created_unix_ms(&s.library.root().join(&entry.path));
+            let first_seen = s
+                .library
+                .first_seen_created_ms(&entry.path)
+                .or_else(|| created_unix_ms(&s.library.root().join(&entry.path)));
             Ok(Note {
                 session,
                 path: entry.path,
@@ -415,7 +420,7 @@ impl Backend {
                 body: d.body,
                 source: d.source,
                 revision: d.revision,
-                created,
+                first_seen,
             })
         })
     }

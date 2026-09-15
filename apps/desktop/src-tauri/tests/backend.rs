@@ -22,6 +22,29 @@ fn fixture() -> (TempDir, std::path::PathBuf, std::path::PathBuf) {
     (temp, root, state)
 }
 #[test]
+fn open_reports_first_seen_that_survives_inode_replacing_saves() {
+    let (_temp, root, state) = fixture();
+    let backend = Backend::new().unwrap();
+    let s = backend.select_with_state(&root, &state).unwrap().session;
+    let note = backend.open(s, "folder/a.md").unwrap();
+    let first = note
+        .first_seen
+        .expect("first-seen recorded for indexed note");
+    assert!(first > 0);
+    let _ack = backend
+        .save(
+            s,
+            "folder/a.md",
+            &note.revision.to_string(),
+            "replaced body",
+        )
+        .unwrap();
+    let reopened = backend.open(s, "folder/a.md").unwrap();
+    assert_eq!(reopened.first_seen, Some(first));
+    backend.shutdown();
+}
+
+#[test]
 fn desktop_search_matches_word_prefixes_and_prefers_titles() {
     let (_temp, root, state) = fixture();
     fs::write(root.join("memory.md"), "# Memory\nKeep retros short\n").unwrap();
