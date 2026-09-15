@@ -123,7 +123,7 @@ jobs:
           # Same version as the mise pin, so local and CI output match.
           version: v2.14.1
           config: cliff.toml
-          args: --unreleased --github-repo ${{ github.repository }} --output ${{ runner.temp }}/release-changes.md
+          args: --latest --github-repo ${{ github.repository }} --output ${{ runner.temp }}/release-changes.md
         env:
           # Authenticates the pull request lookups; unauthenticated ones are rate limited.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

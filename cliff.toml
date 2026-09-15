@@ -5,7 +5,7 @@
 # commits of the released range by type and links each one to its commit and,
 # when it can resolve one, its pull request.
 #
-# Local use (pinned in mise.toml): `mise exec -- git-cliff --unreleased`
+# Local use (pinned in mise.toml): `mise exec -- git-cliff --latest`
 # CI use: the pinned git-cliff-action in .github/workflows/release.yml.
 
 [changelog]
