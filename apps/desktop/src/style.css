@@ -610,7 +610,7 @@ nav h3 { margin: 16px 8px 5px; color: var(--muted); letter-spacing: .08em; }
 .popup-menu button[data-testid="delete-note"],
 .popup-menu button[data-testid="context-delete-note"] { color: var(--error); }
 .focus-action { white-space: nowrap; }
-.preview { max-width: 82ch; margin: 0 auto; padding: 32px clamp(24px, 6vw, 88px) 72px; background: var(--editor); color: var(--text); }
+.preview { max-width: 120ch; margin: 0 auto; padding: 32px clamp(24px, 6vw, 88px) 72px; background: var(--editor); color: var(--text); }
 .preview h1, .preview h2, .preview h3 { font-family: inherit; color: var(--text); }
 .preview a { color: var(--accent); }
 .preview pre, .preview code { background: var(--code); color: var(--text); }
