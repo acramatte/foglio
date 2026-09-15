@@ -24,7 +24,7 @@ The workspace defaults to core/CLI. On machines without GTK/WebKit, use `cargo t
 
 Enter an existing notes directory in **Library folder** and choose **Open library**. Selection uses the same configuration and root format as the CLI through `Library::select_existing()`. Neither selection nor `init` changes Markdown. Supported files need no frontmatter or IDs.
 
-The three-column view shows physical folders (including empty folders), exact tags, notes/search results and a read-only preview with path and tags. Folder filters include descendants. Note opening and link navigation use safe relative paths; identical content and metadata do not disable documents. Diagnostics remain visible. Search is the existing core literal FTS search, capped at the core default of 50 hits. The UI currently displays the returned count, not an exhaustive-match total.
+The three-column view shows physical folders (including empty folders), exact tags, notes/search results and a read-only preview with path and tags. Folder filters include descendants. Note opening and link navigation use safe relative paths; identical content and metadata do not disable documents. Diagnostics remain visible. Search is the existing core FTS search — literal at Phase 4 delivery, Smart (word-prefix) since the [smart search](specs/smart-search.md) delivery — capped at the core default of 50 hits. The UI currently displays the returned count, not an exhaustive-match total.
 
 ```text
 Tauri commands → blocking worker → shared Library → Markdown / disposable SQLite

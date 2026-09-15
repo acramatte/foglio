@@ -12,7 +12,7 @@ use std::{
     name = "notes",
     version,
     about = "Foglio: local-first Markdown notes",
-    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Paths are library-relative .md paths; no IDs or adoption required. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/busy; 5 doctor found issues. doctor is read-only; reindex is the explicit cache repair. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix are explicit. rescan/reindex read all notes. No sync/watcher commands."
+    after_help = "Linux local filesystems only. Delete is permanent: --yes or interactive confirmation required. Paths are library-relative .md paths; no IDs or adoption required. Exit codes: 0 success; 1 operational/partial; 2 usage; 3 not found; 4 conflict/busy; 5 doctor found issues. doctor is read-only; reindex is the explicit cache repair. JSON emits result, diagnostics, incomplete, error. Search is literal by default; --phrase/--prefix/--smart are explicit. rescan/reindex read all notes. No sync/watcher commands."
 )]
 struct Cli {
     #[arg(long, global = true)]
@@ -42,10 +42,13 @@ enum Command {
     /// Search title, body, path and tags through the disposable index.
     Search {
         query: String,
-        #[arg(long, conflicts_with = "prefix")]
+        #[arg(long, conflicts_with_all = ["prefix", "smart"])]
         phrase: bool,
-        #[arg(long)]
+        #[arg(long, conflicts_with = "smart")]
         prefix: bool,
+        /// Complete words first, then words starting with each query token.
+        #[arg(long)]
+        smart: bool,
         #[arg(long)]
         tag: Option<String>,
         #[arg(long)]
@@ -123,6 +126,7 @@ fn execute(cli: &Cli) -> Result<Output> {
             query,
             phrase,
             prefix,
+            smart,
             tag,
             folder,
             limit,
@@ -134,6 +138,8 @@ fn execute(cli: &Cli) -> Result<Output> {
                     SearchMode::Phrase
                 } else if *prefix {
                     SearchMode::Prefix
+                } else if *smart {
+                    SearchMode::Smart
                 } else {
                     SearchMode::Literal
                 },

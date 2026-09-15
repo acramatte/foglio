@@ -5,6 +5,22 @@ use crate::{
 };
 use rusqlite::{Connection, params};
 use serde::Serialize;
+use std::collections::HashSet;
+
+/// Weighted BM25 over (note_path, title, body, path, tags): a title hit
+/// outweighs the same word in the Markdown body ten to one, and `note_path` is
+/// UNINDEXED, so it must weigh zero. Equal relevance falls back to binary path.
+const FIND: &str = concat!(
+    "SELECT n.path,n.title,snippet(notes_fts,-1,'','','…',24),bm25(notes_fts,0,10,1,2,2)",
+    " FROM notes_fts JOIN notes n ON n.path=notes_fts.note_path",
+    " WHERE notes_fts MATCH ?1",
+    " AND (?2 IS NULL OR EXISTS(SELECT 1 FROM tags t WHERE t.note_path=n.path AND t.tag=?2 COLLATE BINARY))",
+    " AND (?3 IS NULL OR substr(n.path,1,length(?3)+1)=?3||'/')",
+    " ORDER BY bm25(notes_fts,0,10,1,2,2),n.path COLLATE BINARY LIMIT ?4"
+);
+/// Shortest token Smart mode may expand: expanding complete single characters
+/// would match nearly every note and make the results meaningless.
+const PREFIX_FROM: usize = 2;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum SearchMode {
@@ -12,6 +28,9 @@ pub enum SearchMode {
     Literal,
     Phrase,
     Prefix,
+    /// Complete words first, then the notes where every word also matches as a
+    /// prefix, so `memo` reaches a note titled `Memory`.
+    Smart,
 }
 #[derive(Debug, Clone)]
 pub struct SearchQuery {
@@ -23,6 +42,15 @@ pub struct SearchQuery {
 }
 impl SearchQuery {
     pub fn literal(text: &str) -> Self {
+        Self::text(text)
+    }
+    pub fn smart(text: &str) -> Self {
+        Self {
+            mode: SearchMode::Smart,
+            ..Self::text(text)
+        }
+    }
+    fn text(text: &str) -> Self {
         Self {
             text: text.into(),
             mode: SearchMode::Literal,
@@ -50,6 +78,41 @@ impl SearchQuery {
         Ok(())
     }
 }
+/// Quote one token so punctuation in a query can never become FTS syntax.
+fn quoted(token: &str) -> String {
+    format!("\"{}\"", token.replace('"', "\"\""))
+}
+/// Literal mode: every token must match a complete indexed word.
+fn complete(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|token| quoted(token))
+        .collect::<Vec<_>>()
+        .join(" AND ")
+}
+/// Explicit prefix mode: every token is a prefix, however short.
+fn prefix_all(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|token| format!("{}*", quoted(token)))
+        .collect::<Vec<_>>()
+        .join(" AND ")
+}
+/// Smart expansion: tokens long enough to be selective also match words that
+/// start with them; shorter tokens stay exact.
+fn prefix_expanded(tokens: &[String]) -> String {
+    tokens
+        .iter()
+        .map(|token| {
+            if token.chars().count() < PREFIX_FROM {
+                quoted(token)
+            } else {
+                format!("{}*", quoted(token))
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" AND ")
+}
 #[derive(Debug, Clone, Serialize)]
 pub struct SearchHit {
     pub path: String,
@@ -73,70 +136,72 @@ pub struct SearchSession {
 impl SearchSession {
     pub fn search(&self, query: &SearchQuery) -> Result<Vec<SearchHit>> {
         query.validate()?;
-        // Use the same tokenizer as the index. Punctuation separates literal
-        // tokens rather than accidentally turning a-b into a phrase query.
-        self.connection.execute_batch("CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_tokens USING fts5(text, tokenize='unicode61'); CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_vocab USING fts5vocab(temp, query_tokens, instance); DELETE FROM temp.query_tokens;").map_err(db_error)?;
-        self.connection
-            .execute(
-                "INSERT INTO temp.query_tokens(text) VALUES(?1)",
-                [&query.text],
-            )
-            .map_err(db_error)?;
-        let tokens: Vec<String> = self
-            .connection
-            .prepare("SELECT term FROM temp.query_vocab ORDER BY offset")
-            .map_err(db_error)?
-            .query_map([], |r| r.get(0))
-            .map_err(db_error)?
-            .collect::<rusqlite::Result<_>>()
-            .map_err(db_error)?;
+        let tokens = self.query_tokens(&query.text)?;
         if tokens.is_empty() {
             return Err(Error::new(
                 ErrorCode::Usage,
                 "query has no searchable tokens",
             ));
         }
-        let quote = |s: &str| format!("\"{}\"", s.replace('"', "\"\""));
-        let expression = match query.mode {
-            SearchMode::Phrase => quote(&tokens.join(" ")),
-            SearchMode::Literal | SearchMode::Prefix => tokens
-                .iter()
-                .map(|t| {
-                    format!(
-                        "{}{}",
-                        quote(t),
-                        if matches!(query.mode, SearchMode::Prefix) {
-                            "*"
-                        } else {
-                            ""
-                        }
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(" AND "),
+        let mut statement = self.connection.prepare(FIND).map_err(db_error)?;
+        let mut find = |expression: &str, limit: usize| -> Result<Vec<SearchHit>> {
+            statement
+                .query_map(
+                    params![expression, query.tag, query.folder, limit as i64],
+                    |r| {
+                        Ok(SearchHit {
+                            path: r.get(0)?,
+                            title: r.get(1)?,
+                            snippet: r.get(2)?,
+                            rank: r.get(3)?,
+                        })
+                    },
+                )
+                .map_err(db_error)?
+                .collect::<rusqlite::Result<_>>()
+                .map_err(db_error)
         };
-        let mut stmt = self.connection.prepare(
-            "SELECT n.path,n.title,snippet(notes_fts,-1,'','','…',24),bm25(notes_fts,0,10,1,2,2)
-             FROM notes_fts JOIN notes n ON n.path=notes_fts.note_path
-             WHERE notes_fts MATCH ?1
-             AND (?2 IS NULL OR EXISTS(SELECT 1 FROM tags t WHERE t.note_path=n.path AND t.tag=?2 COLLATE BINARY))
-             AND (?3 IS NULL OR substr(n.path,1,length(?3)+1)=?3||'/')
-             ORDER BY bm25(notes_fts,0,10,1,2,2),n.path COLLATE BINARY LIMIT ?4"
-        ).map_err(db_error)?;
-        stmt.query_map(
-            params![expression, query.tag, query.folder, query.limit as i64],
-            |r| {
-                Ok(SearchHit {
-                    path: r.get(0)?,
-                    title: r.get(1)?,
-                    snippet: r.get(2)?,
-                    rank: r.get(3)?,
-                })
-            },
-        )
-        .map_err(db_error)?
-        .collect::<rusqlite::Result<_>>()
-        .map_err(db_error)
+        match query.mode {
+            SearchMode::Phrase => find(&quoted(&tokens.join(" ")), query.limit),
+            SearchMode::Literal => find(&complete(&tokens), query.limit),
+            SearchMode::Prefix => find(&prefix_all(&tokens), query.limit),
+            SearchMode::Smart => {
+                // Complete words answer the query first; only slots still free
+                // consider words that merely start with a query token. Tiers
+                // keep BM25 scores of different expressions from being
+                // compared as if they shared one relevance scale.
+                let literal = complete(&tokens);
+                let expanded = prefix_expanded(&tokens);
+                let mut hits = find(&literal, query.limit)?;
+                if hits.len() < query.limit && expanded != literal {
+                    let seen: HashSet<String> = hits.iter().map(|h| h.path.clone()).collect();
+                    for hit in find(&expanded, query.limit)? {
+                        if hits.len() == query.limit {
+                            break;
+                        }
+                        if !seen.contains(&hit.path) {
+                            hits.push(hit);
+                        }
+                    }
+                }
+                Ok(hits)
+            }
+        }
+    }
+    /// Tokenize with the index tokenizer. Punctuation separates literal tokens
+    /// rather than accidentally turning a-b into a phrase query.
+    fn query_tokens(&self, text: &str) -> Result<Vec<String>> {
+        self.connection.execute_batch("CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_tokens USING fts5(text, tokenize='unicode61'); CREATE VIRTUAL TABLE IF NOT EXISTS temp.query_vocab USING fts5vocab(temp, query_tokens, instance); DELETE FROM temp.query_tokens;").map_err(db_error)?;
+        self.connection
+            .execute("INSERT INTO temp.query_tokens(text) VALUES(?1)", [text])
+            .map_err(db_error)?;
+        self.connection
+            .prepare("SELECT term FROM temp.query_vocab ORDER BY offset")
+            .map_err(db_error)?
+            .query_map([], |r| r.get(0))
+            .map_err(db_error)?
+            .collect::<rusqlite::Result<_>>()
+            .map_err(db_error)
     }
 }
 impl Library {

@@ -112,7 +112,7 @@ Recover corruption by replacing/rebuilding only app-owned cache files under coor
 
 Warm opening uses metadata candidates and cached hashes to avoid re-parsing unchanged bodies. Watcher-touched paths are content-checked even if size/mtime match. Full `rescan`/`reindex` hashes everything. Metadata shortcuts cannot prove no offline same-size/same-mtime edit occurred; expose/document that freshness limit.
 
-Search defaults to safe literal token search, not raw user-supplied SQL/FTS syntax. Expose explicit phrase/prefix behavior with tests, escape FTS expressions, parameterize SQL, filter exact tags and component-aware folder prefixes, rank using FTS5 BM25 with deterministic path tie-break. Start with title weighted above body; tune only with fixtures. Return snippets as text and highlight safely, never HTML-inject snippets. Empty query returns a usage error. Invalid queries cannot corrupt state.
+Search defaults to safe literal token search, not raw user-supplied SQL/FTS syntax. Expose explicit phrase/prefix behavior with tests, escape FTS expressions, parameterize SQL, filter exact tags and component-aware folder prefixes, rank using FTS5 BM25 with deterministic path tie-break. Start with title weighted above body; tune only with fixtures. The desktop uses Smart mode: complete words first, then notes whose words start with the query tokens (`memo` finds `Memory`), deduplicated by path with limits and filters applied per tier; literal matching stays the CLI default. Return snippets as text and highlight safely, never HTML-inject snippets. Empty query returns a usage error. Invalid queries cannot corrupt state.
 
 ## 7. Watcher and reconciliation (Phase 3)
 

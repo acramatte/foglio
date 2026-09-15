@@ -8,6 +8,7 @@ Phase 2 adds SQLite/FTS5 and the CLI maintenance/search surface. Markdown remain
 notes search 'meeting agenda'
 notes search 'meeting agenda' --phrase
 notes search 'meet' --prefix --tag Work --folder projects
+notes search 'memo' --smart
 notes search 'meeting' --limit 20 --json
 notes status --json
 notes rescan
@@ -16,7 +17,7 @@ notes reindex
 
 All commands accept the existing `--library` and `--json` flags. `status` and `search` reconcile current metadata candidates. `rescan` hashes/parses every note; `reindex` additionally reconstructs all derived rows transactionally. Every index opening checks SQLite/FTS integrity before claiming healthy state. Neither maintenance nor `init` rewrites notes. Plain Markdown needs no preparation.
 
-Search uses SQLite `unicode61` tokens, ANDs literal tokens, and never exposes raw SQL or FTS syntax. Punctuation separates tokens; phrase mode requires token adjacency; prefix mode prefixes every token. Case/diacritics follow unicode61 for text matching. Tags filter by exact case-sensitive equality; folder filters match a literal directory component prefix, not SQL LIKE patterns. Rank is BM25 with title/body/path/tags weights 10/1/2/2 and a binary path tie-break. Limit defaults to 50, accepts 1–1000; query length is capped at 4096 bytes. Empty, punctuation-only and NUL queries are usage errors. Snippets are plain text, including any source HTML: future UI consumers must escape them, never insert them as HTML.
+Search uses SQLite `unicode61` tokens, ANDs literal tokens, and never exposes raw SQL or FTS syntax. Punctuation separates tokens; phrase mode requires token adjacency; prefix mode prefixes every token; smart mode (desktop default, explicit `--smart`) returns complete-word matches first and then fills the remaining slots with notes where every query token of at least two characters also matches a word prefix, deduplicated by path. Case/diacritics follow unicode61 for text matching. Tags filter by exact case-sensitive equality; folder filters match a literal directory component prefix, not SQL LIKE patterns. Rank is BM25 with title/body/path/tags weights 10/1/2/2 and a binary path tie-break. Limit defaults to 50, accepts 1–1000; query length is capped at 4096 bytes. Empty, punctuation-only and NUL queries are usage errors. Snippets are plain text, including any source HTML: future UI consumers must escape them, never insert them as HTML.
 
 The existing envelope remains `{result, diagnostics, incomplete, error}`. Search result has `hits` and `status`; maintenance result is the status object. Exit codes remain 0 success, 1 operational/partial, 2 usage, 3 missing note, 4 conflict/busy. Status reports observed valid-path Markdown candidates, eligible indexed notes, retained stale records, parsed/reused notes, cache rebuilding, diagnostics and `watcher_active: false` for this process. Counts do not imply inaccessible subtrees have been enumerated.
 
@@ -51,7 +52,7 @@ Executed locally on Linux x86_64 / Rust 1.93.1:
 |---|---|
 | V11 | Core and CLI scan/edit/move/delete; DB deletion/corrupt-header rebuild; complete note-byte manifest preserved |
 | V12 | SQL-trigger injected transaction failure preserves previous tags; post-file-commit cache-open failures preserve create/tag/move/delete; core update failure; unreadable subtree retained stale then confirmed deletion |
-| V13 | Independent title/body/path/tag matching, literal/phrase/prefix, punctuation and Unicode, hostile SQL/FTS strings, exact tags, component-aware wildcard folder names, deterministic ties, text snippets |
+| V13 | Independent title/body/path/tag matching, literal/phrase/prefix, punctuation and Unicode, hostile SQL/FTS strings, exact tags, component-aware wildcard folder names, deterministic ties, text snippets; Smart word-prefix expansion and tiers added by the [smart search](specs/smart-search.md) delivery (`tests/acceptance/search_smart.py`) |
 | V14 (status only) | Actual counts/parse reuse and inactive process watcher; doctor remains Phase 7 |
 | V15 | Concurrent CLI create/reindex/rescan/search/status, held-lock bounded busy, snapshot/rebuild exclusion, existing concurrent no-clobber and stale-write suites |
 | V25 baseline | Reproducible fixed 1k/50k datasets, raw rebuild/warm/search distributions, parse counts, memory and environment |

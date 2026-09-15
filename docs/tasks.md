@@ -184,9 +184,11 @@ Do not check a box just because code exists. The source brief's illustrative exa
 
 - [x] Coordinate same-process watcher scans and desktop mutations to reduce spurious `busy` outcomes without weakening bounded external-process locks, stale revision checks or committed-outcome semantics. Phase 6 native regression observed safe retained-buffer failures requiring explicit Retry save; navigation acceptance exercises this recovery. Regress concurrent watcher/lifecycle/navigation activity before claiming contention-free UX. Shared-handle coordination now waits at most two seconds, preserves immediate external-process lock failure and rejects reentry. Deterministic shared-handle/separate-handle tests and packaged watcher/navigation/close regressions pass. Long scans may still produce explicit Busy; no contention-free claim.
 
-## Deferred search UX
+## Smart search
 
-- [ ] SEARCH-UX: evaluate interactive prefix matching, explicit phrase controls and separately scoped typo tolerance/ranking. Keep current literal behavior until explicitly authorized; add core/UI/native regression criteria before changing it.
+- [x] SEARCH-UX: replace literal-only desktop search with Smart mode — complete words first, then notes where every query token of at least two characters also matches a word prefix, deduplicated by path with limits and exact tag/folder filters applied per tier. The literal CLI default and explicit phrase/prefix behavior are unchanged; `--smart` exposes the new mode. Core tier/dedup/limit/filter/case tests, the desktop backend test, and native WebKit acceptance `tests/acceptance/search_smart.py` pass. Title weighting (10/1/2/2) is unchanged. [Spec](specs/smart-search.md), [decision](decisions.md) D29.
+- [ ] SEARCH-UX-NEXT: separately scoped typo tolerance (“did you mean…”), partial-coverage recovery for queries that match only some words, and highlighting of matched text in titles/snippets. Define the match-kind/span contract and Unicode offset handling before changing the result shape.
+- [ ] Measure the extra bounded prefix query per keystroke against the still-open P7-03 performance budgets; do not claim a latency guarantee from prepared-query numbers.
 
 ## Backlog exclusions
 

@@ -17,7 +17,7 @@ Foglio browses and edits one directory of ordinary Markdown documents, including
 | R05 | One selected library, physical folders | CLI and desktop use the configured root; paths are real relative paths |
 | R06 | Shared headless domain operations | CRUD, move, tags, search, maintenance live in Rust core, not frontend adapters |
 | R07 | First-class CLI | Initialization, list/show/new/move/delete, tags, search, status, reindex, doctor work against real files |
-| R08 | Lexical search | SQLite FTS5 searches title, body, tags, and path; complete rebuild is supported |
+| R08 | Lexical search | SQLite FTS5 searches title, body, tags, and path; an unfinished word still finds its note (`memo` finds `Memory`), with complete-word and title matches ranked first; complete rebuild is supported |
 | R09 | Supported external modifications | Recursive reconciliation observes creation, edits, moves, and deletion without desktop restart |
 | R10 | Conservative mutations | Crash-conscious writes, destination collision checks, stale-write detection, no silent ambiguous repairs |
 | R11 | Useful desktop editing | Folder/note/tag browsing, search, create, edit, move/rename, delete, tag editing, rendering, autosave |
@@ -73,7 +73,7 @@ Preserve unsupported Markdown syntax as text; exclusion of a feature is not perm
 
 ## Scope interpretation
 
-- Desktop creation, source editing and guarded autosave are implemented in Phase 5. Rich mode is omitted after S03 preservation failure. Phase 6 reload/discard and guarded new-path save-copy choices are implemented and verified locally; see [evidence and limits](../phase6.md). Search UX improvements are deferred; current literal search is unchanged.
+- Desktop creation, source editing and guarded autosave are implemented in Phase 5. Rich mode is omitted after S03 preservation failure. Phase 6 reload/discard and guarded new-path save-copy choices are implemented and verified locally; see [evidence and limits](../phase6.md). Desktop search now completes unfinished words and ranks title matches first; see [smart search](smart-search.md). Typo tolerance, partial-coverage recovery and result highlighting remain deferred.
 - Healthy watcher status belongs in a quiet footer: “Monitoring external changes”. It is not a save indicator; monitoring failures stay visible and actionable. Future save status is separate.
 
 - CommonMark plus useful GFM: tables, tasks, fenced code, links, strikethrough, and ordinary inline/block elements.
