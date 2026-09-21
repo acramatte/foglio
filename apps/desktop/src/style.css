@@ -550,6 +550,7 @@ header {
   letter-spacing: -0.4px;
   color: var(--text);
 }
+.app-version { color: var(--muted); font-size: 12px; }
 .appearance-settings {
   margin-left: auto;
   border: 1px solid var(--border);

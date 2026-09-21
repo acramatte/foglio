@@ -13,6 +13,8 @@ pub struct DoctorDiagnostic {
 }
 #[derive(Debug, Default, Serialize)]
 pub struct DoctorReport {
+    /// Version of the Foglio binary producing this report.
+    pub version: String,
     pub root: PathBuf,
     pub cache_path: Option<PathBuf>,
     pub discovered_notes: usize,
@@ -230,6 +232,7 @@ impl Library {
         };
         scan.walk(self.root());
         let mut report = DoctorReport {
+            version: env!("CARGO_PKG_VERSION").into(),
             root: self.root().to_path_buf(),
             cache_path: self.cache_path().ok(),
             discovered_notes: scan.status.discovered_notes,

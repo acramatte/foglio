@@ -123,6 +123,7 @@ export class App {
   private stopped = false;
   private timer?: ReturnType<typeof setInterval>;
   private readonly status = element("span", "Connecting…", "status");
+  private readonly versionLabel = element("span", "", "app-version");
   private readonly updateNotice = element("button", "", "update-notice");
   private readonly error = element("div", "", "error");
   private readonly root = element("input");
@@ -213,10 +214,15 @@ export class App {
     this.appearanceSettings.dataset.testid = "appearance-settings";
     this.appearanceSettings.setAttribute("aria-haspopup", "dialog");
     this.appearanceSettings.addEventListener("click", () => { void this.configureAppearance(); });
+    this.versionLabel.dataset.testid = "app-version";
     header.append(
       element("strong", "foglio", "wordmark"),
+      this.versionLabel,
       this.appearanceSettings,
     );
+    this.api.version().then(v => {
+      this.versionLabel.textContent = `v${v}`;
+    }).catch(() => { this.versionLabel.hidden = true; });
     const form = element("form", undefined, "library-form");
     const label = element("label", "Open library");
     this.root.id = "root-path";
