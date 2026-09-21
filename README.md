@@ -25,6 +25,9 @@ Markdown files → local index and watcher → desktop navigation, source, and p
 Source edits → revision-guarded autosave → atomic Markdown write → refreshed index
 ```
 
+https://github.com/user-attachments/assets/75827443-efee-4702-a027-c5d0184b8fb2
+
+
 ## Desktop
 
 Download the installer for your platform from the [latest release](https://github.com/acramatte/foglio/releases/latest). The assets there are:
