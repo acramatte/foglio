@@ -51,14 +51,27 @@ pub(crate) fn db_error(e: rusqlite::Error) -> Error {
 fn corrupt(e: &rusqlite::Error) -> bool {
     matches!(e, rusqlite::Error::SqliteFailure(e, _) if matches!(e.code, rusqlite::ErrorCode::DatabaseCorrupt | rusqlite::ErrorCode::NotADatabase))
 }
-fn connect(path: &Path) -> rusqlite::Result<Connection> {
+/// An index-open failure that is either a plain SQLite/rusqlite error or a
+/// descriptive refusal to touch a cache whose schema this build does not know.
+enum OpenFailure {
+    Sql(rusqlite::Error),
+    Unsupported(String),
+}
+impl From<rusqlite::Error> for OpenFailure {
+    fn from(e: rusqlite::Error) -> Self {
+        Self::Sql(e)
+    }
+}
+fn connect(path: &Path) -> std::result::Result<Connection, OpenFailure> {
     // Reject future schemas before a writable connection can change journaling
     // or checkpoint their WAL. The cooperative root lock covers this probe too.
     let probe = Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     probe.busy_timeout(Duration::from_millis(250))?;
     let version: i64 = probe.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if !(0..=3).contains(&version) {
-        return Err(rusqlite::Error::InvalidQuery);
+        return Err(OpenFailure::Unsupported(format!(
+            "cache schema version {version} is newer than this build; upgrade Foglio or remove this disposable cache"
+        )));
     }
     drop(probe);
     let conn = Connection::open(path)?;
@@ -103,14 +116,14 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
         .open(path)?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     let mut obsolete_schema = false;
-    let attempt = (|| -> rusqlite::Result<Connection> {
+    let attempt = (|| -> std::result::Result<Connection, OpenFailure> {
         let conn = connect(path)?;
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version == 1 {
             // Schema 1 encoded metadata IDs. Only discard this known old cache;
             // unknown future versions must remain untouched and return an error.
             obsolete_schema = true;
-            return Err(rusqlite::Error::InvalidQuery);
+            return Err(rusqlite::Error::InvalidQuery.into());
         }
         if version == 0 {
             conn.execute_batch("BEGIN IMMEDIATE;")?;
@@ -124,7 +137,9 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
             conn.execute_batch(include_str!("../migrations/003_first_seen.sql"))?;
             conn.execute_batch("COMMIT;")?;
         } else if version != 3 {
-            return Err(rusqlite::Error::InvalidQuery);
+            return Err(OpenFailure::Unsupported(format!(
+                "cache schema version {version} is newer than this build; upgrade Foglio or remove this disposable cache"
+            )));
         }
         conn.prepare(
             "SELECT path, title, body, tags_json, content_hash, fingerprint, stale FROM files",
@@ -137,7 +152,8 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
                 return Err(rusqlite::Error::SqliteFailure(
                     rusqlite::ffi::Error::new(11),
                     Some(health),
-                ));
+                )
+                .into());
             }
             conn.execute(
                 "INSERT INTO notes_fts(notes_fts) VALUES('integrity-check')",
@@ -148,7 +164,7 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
     })();
     match attempt {
         Ok(conn) => Ok((conn, !existed)),
-        Err(e) if obsolete_schema || corrupt(&e) => {
+        Err(OpenFailure::Sql(e)) if obsolete_schema || corrupt(&e) => {
             // Every Foglio connection holds the same lock; no live app readers or WAL writers.
             secure_cache(path)?;
             for suffix in ["-journal", "-wal", "-shm", ""] {
@@ -162,7 +178,8 @@ fn open(path: &Path) -> Result<(Connection, bool)> {
             let (conn, _) = open(path)?;
             Ok((conn, true))
         }
-        Err(e) => Err(db_error(e)),
+        Err(OpenFailure::Sql(e)) => Err(db_error(e)),
+        Err(OpenFailure::Unsupported(message)) => Err(Error::new(ErrorCode::Unsupported, message)),
     }
 }
 fn fingerprint(m: &fs::Metadata) -> String {
