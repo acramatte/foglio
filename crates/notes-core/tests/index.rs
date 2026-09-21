@@ -192,6 +192,11 @@ fn cache_symlinks_hardlinks_sidecars_and_future_schema_are_refused() {
     drop(conn);
     let before = fs::read(&cache).unwrap();
     assert!(lib.reindex().is_err());
+    let e = lib.reindex().unwrap_err();
+    assert!(
+        e.to_string().contains("cache schema version 999"),
+        "expected a schema-version error, got: {e}"
+    );
     assert!(
         fs::read(&cache).unwrap() == before,
         "future schema bytes changed"
