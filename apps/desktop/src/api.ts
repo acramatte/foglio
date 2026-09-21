@@ -80,6 +80,7 @@ export interface Api {
     target: string,
   ): Promise<{ session: number; path: string }>;
   external(url: string): Promise<void>;
+  version(): Promise<string>;
   checkUpdate(): Promise<UpdateInfo | null>;
 }
 export const api: Api = {
@@ -101,6 +102,7 @@ export const api: Api = {
   resolve: (session, fromPath, target) =>
     invoke("resolve_note_link", { session, fromPath, target }),
   external: (url) => invoke("open_external_link", { url }),
+  version: () => invoke("app_version"),
   checkUpdate: () => invoke("check_update"),
 };
 export function errorCode(error: unknown): string {

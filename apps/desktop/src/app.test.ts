@@ -9,7 +9,7 @@ function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promi
 let app:App;
 afterEach(() => {app?.stop(); document.body.replaceChildren();});
 function setup(overrides:Partial<Api> = {}) {
- const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),appearance:vi.fn().mockResolvedValue("system"),setAppearance:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),checkUpdate:vi.fn().mockResolvedValue(null),...overrides};
+ const api:Api = {copy:vi.fn(),save:vi.fn().mockResolvedValue({session:1,path:"a.md",revision:"new",file_committed:true,warnings:[]}),create:vi.fn(),move:vi.fn(),delete:vi.fn(),tag:vi.fn(),close:vi.fn().mockResolvedValue(undefined),appearance:vi.fn().mockResolvedValue("system"),setAppearance:vi.fn().mockResolvedValue(undefined),state:vi.fn().mockResolvedValue(state),select:vi.fn().mockResolvedValue(state),browse:vi.fn().mockResolvedValue(browse),search:vi.fn().mockResolvedValue({session:1,hits:[],incomplete:false}),open:vi.fn(async(_s,path)=>note(path)),resolve:vi.fn().mockResolvedValue({session:1,path:"b.md"}),external:vi.fn().mockResolvedValue(undefined),version:vi.fn().mockResolvedValue("0.3.0"),checkUpdate:vi.fn().mockResolvedValue(null),...overrides};
  const host=document.createElement("div");document.body.append(host);app=new App(host,api);return {host,api};
 }
 describe("Phase 6 conflict choices",()=>{
@@ -84,6 +84,17 @@ describe("Phase 6 conflict choices",()=>{
   await dialog(host,"copy");submit(host);await vi.waitFor(()=>expect(api.open).toHaveBeenCalledWith(1,"copy.md"));
   await app.open("b.md");await app.requestClose();expect(source.readOnly).toBe(true);expect(api.close).not.toHaveBeenCalled();
   pending.resolve({...note("copy.md","local"),revision:"copy"});await vi.waitFor(()=>expect(source.readOnly).toBe(false));
+ });
+});
+describe("App version",()=>{
+ it("shows the backend version next to the wordmark",async()=>{
+  const {host}=setup();
+  await vi.waitFor(()=>expect(host.querySelector("[data-testid=app-version]")?.textContent).toBe("v0.3.0"));
+ });
+ it("hides the version element when the backend cannot supply it",async()=>{
+  const {host}=setup({version:vi.fn().mockRejectedValue("x")});
+  await new Promise(r=>setTimeout(r,0));
+  expect(host.querySelector<HTMLElement>("[data-testid=app-version]")!.hidden).toBe(true);
  });
 });
 describe("Source edit shortcuts", () => {

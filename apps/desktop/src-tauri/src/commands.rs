@@ -3,6 +3,11 @@ use tauri::{Emitter, Manager, State};
 use update::{LATEST_RELEASE_URL, UpdateInfo};
 
 #[tauri::command]
+fn app_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+#[tauri::command]
 async fn check_update() -> Result<Option<UpdateInfo>> {
     blocking(|| update::latest_release(LATEST_RELEASE_URL, env!("CARGO_PKG_VERSION"))).await
 }
@@ -231,7 +236,8 @@ pub fn run() {
             finish_close,
             resolve_note_link,
             open_external_link,
-            check_update
+            check_update,
+            app_version
         ])
         .build(tauri::generate_context!())
         .expect("build Foglio desktop");

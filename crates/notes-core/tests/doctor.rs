@@ -17,6 +17,7 @@ fn doctor_missing_cache_does_not_create_state() {
     let r = lib.doctor().unwrap();
     assert!(has(&r, "cache_missing"));
     assert_eq!(r.discovered_notes, 1);
+    assert_eq!(r.version, env!("CARGO_PKG_VERSION"));
     assert!(!t.path().join("state").exists());
     assert_eq!(fs::read(lib.root().join("a.md")).unwrap(), b"# Original\n");
 }

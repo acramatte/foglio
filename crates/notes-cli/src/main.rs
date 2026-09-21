@@ -162,7 +162,8 @@ fn execute(cli: &Cli) -> Result<Output> {
             diagnostics = json!(report.diagnostics);
             incomplete = report.incomplete;
             let mut human = format!(
-                "{} discovered; {} indexed; {} stale; {} orphan; {} unindexed\nRead-only inspection; repair derived state explicitly with reindex.\n",
+                "Foglio {} (CLI + index)\n{} discovered; {} indexed; {} stale; {} orphan; {} unindexed\nRead-only inspection; repair derived state explicitly with reindex.\n",
+                report.version,
                 report.discovered_notes,
                 report.indexed_notes,
                 report.stale_notes,
