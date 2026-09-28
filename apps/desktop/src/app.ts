@@ -102,6 +102,7 @@ export class App {
   private readonly sourceHistory: SourceHistory;
   private readonly gutter = element("div", undefined, "line-gutter");
   private readonly sourceWrap = element("div", undefined, "source-wrap");
+  private sourceResize?: ResizeObserver;
   private readonly saveStatus = element("span", "", "save-status");
   private readonly wordCount = element("span", "", "word-count");
   private readonly saveError = element("div", "", "save-error");
@@ -316,7 +317,7 @@ export class App {
     );
     this.source.dataset.testid="source";
     this.source.setAttribute("aria-label", "Markdown source (body only)");
-    this.source.wrap="off";
+    this.source.wrap="soft"; // Visual wrap only: never writes line breaks to the file.
     this.source.spellcheck=false;
     this.source.addEventListener("keydown", event => {
       if (event.defaultPrevented || event.isComposing || event.altKey || this.source.readOnly) return;
@@ -330,6 +331,11 @@ export class App {
       this.sourceHistory.apply(command === "redo");
     });
     this.source.addEventListener("input",()=>{if (!this.busy) this.editor?.edit(this.source.value);this.updateGutter();this.updateWordCount();this.fitSource();});
+    // Wrapping depends on the available width; refit and realign on resize.
+    if (typeof ResizeObserver!=="undefined") {
+      this.sourceResize=new ResizeObserver(()=>{this.fitSource();this.alignGutter();});
+      this.sourceResize.observe(this.sourceWrap);
+    }
     // Record after the input handler updates the editor's lossless raw body.
     this.sourceHistory = new SourceHistory(this.source, body => {
       this.editor?.restoreBody(body);this.updateGutter();this.fitSource();
@@ -611,6 +617,7 @@ export class App {
     this.host.ownerDocument.removeEventListener("scroll", this.onMenuViewportChange, true);
     this.host.ownerDocument.defaultView?.removeEventListener("resize", this.onMenuViewportChange);
     this.closeMenu();
+    this.sourceResize?.disconnect();
     this.editor?.dispose();
     clearInterval(this.timer);
     this.epoch++;
@@ -1191,17 +1198,44 @@ export class App {
       const nodes = this.gutter.children;
       for (let i = 0; i < nodes.length; i++) (nodes[i] as HTMLElement).textContent = String(i + 1);
     }
+    this.alignGutter();
   }
-  // Grow the textarea to its content so overflow lives on .source-wrap, not on
-  // the text. field-sizing:content is preferred; this covers WebKitGTK without it.
-  // clientHeight excludes the top border while scrollHeight does not, so the
-  // fitted height must add the border back or the field stays 1px short.
+  // Fit the textarea to its content so overflow lives on .source-wrap, not on
+  // the text. With soft wrap the width is the available wrap width and the
+  // height follows the wrapped content. field-sizing:content is preferred;
+  // this covers WebKitGTK without it. clientHeight excludes the top border
+  // while scrollHeight does not, so the fitted height must add the border back
+  // or the field stays 1px short.
   private fitSource(): void {
     if (this.source.hidden) return;
-    this.source.style.width="0";this.source.style.height="0";
+    this.source.style.width=Math.max(this.sourceWrap.clientWidth-this.gutter.offsetWidth,0)+"px";
+    this.source.style.height="0";
     const border=this.source.offsetHeight-this.source.clientHeight;
-    this.source.style.width=Math.max(this.source.scrollWidth, this.sourceWrap.clientWidth - this.gutter.offsetWidth)+"px";
     this.source.style.height=Math.max(this.source.scrollHeight+border, this.sourceWrap.clientHeight)+"px";
+  }
+  // Soft wrap splits one physical line across several visual rows; give each
+  // gutter number the rendered height of its line so the column stays aligned.
+  // Measured with a mirror element sharing the source's metrics; without layout
+  // (jsdom, hidden source) numbers keep their single-row height.
+  private alignGutter(): void {
+    if (this.source.hidden || this.gutter.hidden) return;
+    const doc=this.host.ownerDocument;
+    const mirror=doc.createElement("div");
+    mirror.className="source-measure";
+    mirror.style.width=this.source.clientWidth+"px";
+    for (const line of this.source.value.split("\n")) {
+      const row=doc.createElement("div");
+      row.textContent=line || "\u200b"; // An empty line still occupies one row.
+      mirror.append(row);
+    }
+    mirror.style.top="0";mirror.style.left="0";
+    this.sourceWrap.append(mirror);
+    const nodes=this.gutter.children, rows=mirror.children;
+    for (let i=0;i<nodes.length;i++) {
+      const height=i<rows.length ? (rows[i] as HTMLElement).offsetHeight : 0;
+      (nodes[i] as HTMLElement).style.minHeight=height>0 ? height+"px" : "";
+    }
+    mirror.remove();
   }
   get hasUnsavedChanges(): boolean {return !!this.editor?.pending || this.busy;}
   private async protect(): Promise<boolean> {
