@@ -137,9 +137,11 @@ def main():
                 scenarios.append('long preview scroll stays inside the note pane')
                 open_note('wide.md')
                 click('[data-testid=source-mode]')
-                assert js("const w=document.querySelector('.source-wrap'), s=document.querySelector('[data-testid=source]');return w.scrollWidth>w.clientWidth && w.scrollHeight>w.clientHeight && s.scrollWidth<=s.clientWidth && s.scrollHeight<=s.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
-                assert js("const w=document.querySelector('.source-wrap');w.scrollLeft=40;w.scrollTop=80;return w.scrollLeft>0 && w.scrollTop>0")
-                scenarios.append('wide source scroll stays on the wrapper, not the textarea')
+                # Soft wrap keeps the source inside the pane: vertical overflow only,
+                # on the wrapper, with no horizontal scroll in either element.
+                assert js("const w=document.querySelector('.source-wrap'), s=document.querySelector('[data-testid=source]');return w.scrollHeight>w.clientHeight && w.scrollWidth<=w.clientWidth && s.scrollWidth<=s.clientWidth && s.scrollHeight<=s.clientHeight && document.documentElement.scrollHeight===document.documentElement.clientHeight")
+                assert js("const w=document.querySelector('.source-wrap');w.scrollTop=80;return w.scrollTop>0")
+                scenarios.append('wide source wraps visually and scrolls vertically on the wrapper, not the textarea')
                 open_note('preserve.md')
                 click('[data-testid=source-mode]')
                 js("const e=document.querySelector('textarea');e.focus();const i=e.value.indexOf('untouched');e.setSelectionRange(i,i+'untouched'.length)")

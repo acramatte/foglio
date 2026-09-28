@@ -316,11 +316,16 @@ describe("line-number gutter", () => {
   expect(gutter.querySelectorAll(".line-number")).toHaveLength(3);
   expect(gutter.lastElementChild!.textContent).toBe("3");
  });
- it("disables wrapping so a long line cannot skip the last number",async()=>{
+ it("soft-wraps long lines: visual wrap stays on and one physical line keeps one number",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
   host.querySelector<HTMLButtonElement>("[data-testid=source-mode]")!.click();
   const source=host.querySelector<HTMLTextAreaElement>("[data-testid=source]")!;
-  expect(source.wrap).toBe("off");
+  expect(source.wrap).toBe("soft");
+  source.value="one long physical line that the editor will wrap visually without inserting a line break";
+  source.dispatchEvent(new Event("input",{bubbles:true}));
+  const gutter=host.querySelector<HTMLElement>("[data-testid=line-gutter]")!;
+  expect(gutter.querySelectorAll(".line-number")).toHaveLength(1);
+  expect(gutter.lastElementChild!.textContent).toBe("1");
  });
  it("toggles line numbers with Ctrl+L and keeps the state across mode switches",async()=>{
   const {host}=setup();await app.start();await app.open("a.md");
