@@ -41,6 +41,8 @@ jobs:
         run: python3 tests/acceptance/phase1.py
       - name: Phase 2 index and search acceptance
         run: python3 tests/acceptance/phase2.py
+      - name: Release asset-set guard tests
+        run: python3 tests/acceptance/release_assets.py
       - name: CLI help with isolated state
         shell: bash
         run: |

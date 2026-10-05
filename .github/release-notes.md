@@ -21,7 +21,7 @@ The v1 release gate is not complete. See the [Phase 7 evidence and open release 
 
 ## Verification
 
-Each release build runs the locked Rust/frontend checks, constructs the Debian package, and runs the staged native WebKit acceptance harness in hosted CI.
+Pre-release CI runs the locked Rust/frontend checks and staged Debian/native WebKit acceptance. The tag workflow builds all platform artifacts, then a single publishing job verifies the complete asset set, signs the combined checksums and update manifest, and attests the builds before publishing.
 
 Release assets carry build-provenance attestations: `gh attestation verify <file> --repo acramatte/foglio` proves a file was built by this repository's release workflow.
 
