@@ -109,6 +109,14 @@ def main():
         library = sandbox / "notes"
         (library / "Projects").mkdir(parents=True)
         (library / "Empty").mkdir()
+        (library / ".git/objects").mkdir(parents=True)
+        (library / ".git/HEAD").write_text("ref: refs/heads/main\n")
+        (library / ".git/hidden.md").write_text("# Git metadata, not a note\n")
+        (library / "Projects/.git/refs").mkdir(parents=True)
+        (library / "Projects/.git/config").write_text("[core]\n")
+        (library / ".hidden").mkdir()
+        (library / ".wt").mkdir()
+        (library / ".wt/.git").write_text("gitdir: elsewhere\n")
         note = library / "Projects/first.md"
         note.write_text(f'''---
 id: user-metadata
@@ -161,7 +169,8 @@ tags: [work]
                 assert state["root"] == str(library) and state["watcher_active"], state
                 browse = driver.invoke("browse_library", {"session": session})
                 assert browse["ok"], browse
-                assert "Empty" in browse["value"]["folders"], "physical empty folder missing"
+                assert set(browse["value"]["folders"]) == {"Empty", "Projects", ".hidden", ".wt"}, browse
+                assert driver.js("return !!document.querySelector('[data-filter-key=\"folder:.hidden\"]') && !Array.from(document.querySelectorAll('[data-filter-key]')).some(e => e.dataset.filterKey.split('/').includes('.git') || e.dataset.filterKey === 'folder:.git')"), "Git metadata in native folder tree"
                 assert {n["path"] for n in browse["value"]["notes"]} == {"Projects/first.md", "second.md", "plain.md"}
                 assert not browse["value"]["incomplete"]
                 assert driver.js("return document.querySelector('[data-filter-key=\"all\"] .filter-count').textContent === '3' && document.querySelector('[data-filter-key=\"folder:Projects\"] .filter-count').textContent === '1' && document.querySelector('[data-filter-key=\"folder:Empty\"] .filter-count').textContent === '0' && !document.querySelector('[data-filter-key=\"tag:work\"] .filter-count')"), "sidebar note counts"

@@ -617,7 +617,9 @@ fn collect_folders(
             let entry = entry?;
             if entry.file_type()?.is_dir() {
                 let path = entry.path();
-                if let Some(relative) = path.strip_prefix(root).ok().and_then(Path::to_str) {
+                if let Some(relative) = path.strip_prefix(root).ok().and_then(Path::to_str)
+                    && !notes_core::filesystem::is_git_metadata(relative)
+                {
                     folders.push(relative.into());
                     collect_folders(root, &path, folders, diagnostics);
                 }
@@ -767,5 +769,25 @@ mod mutation_tests {
             .unwrap()
             .as_millis() as i64;
         assert!(created <= now && now - created < 60_000);
+    }
+
+    #[test]
+    fn collect_folders_excludes_git_metadata_and_keeps_hidden_folders() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        std::fs::create_dir_all(root.join(".git/objects/ab")).unwrap();
+        std::fs::write(root.join(".git/config"), b"[core]\n").unwrap();
+        std::fs::create_dir_all(root.join("nested/repo/.git/refs")).unwrap();
+        std::fs::create_dir_all(root.join(".hidden")).unwrap();
+        std::fs::create_dir_all(root.join(".wt")).unwrap();
+        // Git worktree form: `.git` pointer file inside a real folder.
+        std::fs::write(root.join(".wt/.git"), b"gitdir: elsewhere\n").unwrap();
+
+        let mut folders = Vec::new();
+        let mut diagnostics = Vec::new();
+        collect_folders(root, root, &mut folders, &mut diagnostics);
+        folders.sort();
+        assert_eq!(folders, [".hidden", ".wt", "nested", "nested/repo"]);
+        assert!(diagnostics.is_empty());
     }
 }
