@@ -353,6 +353,14 @@ fn run(
                 if path == library.root() || !path.starts_with(library.root()) {
                     shared.recovery.fetch_or(LOST, Ordering::Release);
                 }
+                // Git metadata is not library content: never dirty the index for it.
+                let git_metadata = path
+                    .strip_prefix(library.root())
+                    .ok()
+                    .is_some_and(|r| crate::filesystem::is_git_metadata(&r.to_string_lossy()));
+                if git_metadata {
+                    continue;
+                }
                 if dirty.len() < options.dirty_capacity {
                     dirty.insert(path);
                 } else {

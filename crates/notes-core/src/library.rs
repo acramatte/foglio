@@ -232,6 +232,10 @@ impl Library {
                 .to_string_lossy()
                 .into_owned();
             let result = (|| -> Result<()> {
+                if fs::is_git_metadata(&relative) {
+                    // Git metadata is not library content; neither diagnose nor recurse.
+                    return Ok(());
+                }
                 let meta = disk::symlink_metadata(&p)?;
                 if meta.file_type().is_symlink() {
                     return Err(Error::new(ErrorCode::Unsupported, "symlink not followed"));

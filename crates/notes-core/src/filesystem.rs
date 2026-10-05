@@ -9,6 +9,13 @@ use std::{
 };
 pub const MAX_NOTE_BYTES: usize = 16 * 1024 * 1024;
 
+/// Git metadata is excluded from discovery, watching and the folder tree:
+/// a `.git` directory (root or nested) and the `.git` pointer file of a Git
+/// worktree. Hidden-inclusive discovery (D11) otherwise stays intact.
+pub fn is_git_metadata(relative: &str) -> bool {
+    relative.split('/').any(|c| c == ".git")
+}
+
 // Only ordinary Unix mode-bit files are supported for replacement. Refuse
 // security metadata we cannot preserve instead of broadening effective access.
 /// macOS attaches `com.apple.*` attributes of its own accord inside protected

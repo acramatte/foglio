@@ -225,3 +225,36 @@ fn invalid_paths_non_utf8_and_case_only_rename() {
         "body"
     );
 }
+
+#[test]
+fn git_metadata_is_absent_from_discovery_without_touching_hidden_notes() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lib = library(tmp.path());
+    fs::write(lib.root().join("a.md"), "# A\n").unwrap();
+    fs::create_dir_all(lib.root().join(".git/objects/ab")).unwrap();
+    fs::write(lib.root().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    fs::write(lib.root().join(".git/config"), "[core]\n").unwrap();
+    fs::create_dir_all(lib.root().join("nested/repo/.git/refs")).unwrap();
+    fs::write(lib.root().join("nested/repo/.git/config"), "[core]\n").unwrap();
+    // Git worktree form: a `.git` pointer file instead of a directory.
+    fs::create_dir_all(lib.root().join(".wt")).unwrap();
+    fs::write(
+        lib.root().join(".wt/.git"),
+        "gitdir: ../.git/worktrees/wt\n",
+    )
+    .unwrap();
+    // Hidden-inclusive discovery (D11) survives outside Git metadata.
+    fs::create_dir_all(lib.root().join(".hidden")).unwrap();
+    fs::write(lib.root().join(".hidden/secret.md"), "# Secret\n").unwrap();
+
+    let report = lib.scan().unwrap();
+    let paths: Vec<_> = report.notes.iter().map(|e| e.path.as_str()).collect();
+    assert_eq!(paths, [".hidden/secret.md", "a.md"]);
+    assert!(report.diagnostics.is_empty(), "{:?}", report.diagnostics);
+    assert!(!report.incomplete);
+    // Metadata itself stays untouched on disk.
+    assert_eq!(
+        fs::read(lib.root().join(".git/HEAD")).unwrap(),
+        b"ref: refs/heads/main\n"
+    );
+}
