@@ -125,7 +125,7 @@ The desktop shows a note's creation date/time. Atomic saves replace the file's i
 | D17 | Source editor and sanitized preview first; rich mode only if round-trip spike passes | Meet v1 without sacrificing Markdown preservation; resolve in P5-01 |
 | D19 | Dirty conflict resolution offers reload (explicit discard) or save local buffer as a new note at a new no-clobber path; no blind force-overwrite | Preserve both versions without introducing history; resolved in Phase 6 above |
 | D20 | No delete undo/history in v1; delete is a confirmed permanent filesystem removal | Source requires deletion but excludes history; make limitation visible; resolve in P1-06 |
-| D21 | Git metadata — a `.git` directory (root or nested) and the `.git` pointer file of a Git worktree — is excluded from discovery, watching, the folder tree and diagnostics; other hidden paths stay visited per D11 | Git internals are version-control state, not library content; diagnosing them marks scans incomplete and degrades commits (`committed` exit) though nothing is wrong. Narrow exclusion, not a general hidden-file or non-Markdown rule; resolved in the ignore-git-metadata change |
+| D21 | Git metadata — a `.git` directory (root or nested) and the `.git` pointer file of a Git worktree — is excluded from discovery, watcher dirty hints, the folder tree and diagnostics; native watching remains recursive and genuine gaps still recover; other hidden paths stay visited per D11 | Git internals are version-control state, not library content; diagnosing them marks scans incomplete and degrades commits (`committed` exit) though nothing is wrong. Narrow exclusion, not a general hidden-file or non-Markdown rule; resolved in the ignore-git-metadata change |
 
 ## Evidence-required spikes
 

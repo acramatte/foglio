@@ -108,6 +108,39 @@ fn atomic_burst_same_size_mtime_and_subscription_overflow() {
     assert!(slow.is_closed());
 }
 #[test]
+fn git_activity_does_not_reconcile_but_hidden_note_edits_do() {
+    let (_t, lib) = fixture();
+    fs::create_dir_all(lib.root().join(".git/objects")).unwrap();
+    fs::create_dir_all(lib.root().join("nested/.git")).unwrap();
+    fs::create_dir_all(lib.root().join(".hidden")).unwrap();
+    fs::write(lib.root().join(".hidden/a.md"), "# Before").unwrap();
+    fs::write(lib.root().join("nested/.git/hidden.md"), "# Not content").unwrap();
+    let mut opts = options();
+    opts.hint_capacity = 1;
+    opts.dirty_capacity = 1;
+    let w = Watcher::start(lib.clone(), opts).unwrap();
+    let initial = w.snapshot();
+    assert!(!initial.status.incomplete);
+    assert_eq!(initial.notes.len(), 1);
+    writer(
+        &lib,
+        "import pathlib,sys\np=pathlib.Path(sys.argv[1])\nfor i in range(200):\n (p/'.git/HEAD').write_text(str(i)); (p/'nested/.git/config').write_text(str(i))",
+    );
+    // Beyond max_batch_delay: ignored hints must not arm debounce or overflow.
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(w.snapshot().generation, initial.generation);
+    writer(
+        &lib,
+        "import pathlib,sys\n(pathlib.Path(sys.argv[1])/'.hidden/a.md').write_text('# After')",
+    );
+    let expected = revision(b"# After");
+    wait(&w, |s| {
+        s.notes[0].revision == expected && !s.status.incomplete
+    });
+    w.shutdown().unwrap();
+}
+
+#[test]
 fn pause_resume_manual_loss_periodic_and_restart() {
     let (_t, lib) = fixture();
     let mut opts = options();

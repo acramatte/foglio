@@ -11,7 +11,7 @@ use crate::{
 use notify::{Config, EventKind as NativeKind, RecommendedWatcher, RecursiveMode, Watcher as _};
 use std::{
     collections::{BTreeMap, HashSet, VecDeque},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, Weak,
         atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -271,6 +271,49 @@ impl Drop for RegisteredWatcher {
     }
 }
 
+fn enqueue_hint(
+    root: &Path,
+    tx: &SyncSender<Vec<PathBuf>>,
+    shared: &Shared,
+    limit: usize,
+    result: notify::Result<notify::Event>,
+) {
+    if shared.paused.load(Ordering::Acquire) {
+        return;
+    }
+    match result {
+        Ok(mut event) => {
+            if event.need_rescan() {
+                shared.recovery.fetch_or(LOST, Ordering::Release);
+            }
+            // Scanner reads generate access hints; ignore them to avoid feedback.
+            if matches!(event.kind, NativeKind::Access(_)) {
+                return;
+            }
+            if event.paths.is_empty() || matches!(event.kind, NativeKind::Any | NativeKind::Other) {
+                shared.recovery.fetch_or(LOST, Ordering::Release);
+                return;
+            }
+            // Filter before queue limits and debounce, but retain the library side
+            // of a rename crossing the metadata boundary. Real gaps still recover.
+            event.paths.retain(|path| {
+                !path.strip_prefix(root).ok().is_some_and(|relative| {
+                    crate::filesystem::is_git_metadata(&relative.to_string_lossy())
+                })
+            });
+            if event.paths.is_empty() {
+                return;
+            }
+            if event.paths.len() > limit || tx.try_send(event.paths).is_err() {
+                shared.recovery.fetch_or(LOST, Ordering::Release);
+            }
+        }
+        Err(_) => {
+            shared.recovery.fetch_or(LOST, Ordering::Release);
+        }
+    }
+}
+
 fn observe(
     library: &Arc<Library>,
     tx: SyncSender<Vec<PathBuf>>,
@@ -279,37 +322,9 @@ fn observe(
 ) -> Result<RegisteredWatcher> {
     let root = library.root();
     crate::filesystem::check_chain(root)?;
+    let observed_root = root.to_path_buf();
     let mut native = RecommendedWatcher::new(
-        move |result: notify::Result<notify::Event>| {
-            if shared.paused.load(Ordering::Acquire) {
-                return;
-            }
-            match result {
-                Ok(event) => {
-                    if event.need_rescan() {
-                        shared.recovery.fetch_or(LOST, Ordering::Release);
-                    }
-                    // Reads from our scanner generate access hints. Ignoring access is
-                    // essential; modify/metadata/rename/create/remove are never suppressed.
-                    if matches!(event.kind, NativeKind::Access(_)) {
-                        return;
-                    }
-                    if event.paths.is_empty()
-                        || event.paths.len() > limit
-                        || matches!(event.kind, NativeKind::Any | NativeKind::Other)
-                    {
-                        shared.recovery.fetch_or(LOST, Ordering::Release);
-                        return;
-                    }
-                    if tx.try_send(event.paths).is_err() {
-                        shared.recovery.fetch_or(LOST, Ordering::Release);
-                    }
-                }
-                Err(_) => {
-                    shared.recovery.fetch_or(LOST, Ordering::Release);
-                }
-            }
-        },
+        move |result| enqueue_hint(&observed_root, &tx, &shared, limit, result),
         Config::default().with_follow_symlinks(false),
     )
     .map_err(|e| Error::new(ErrorCode::Io, e))?;
@@ -352,14 +367,6 @@ fn run(
             for path in paths {
                 if path == library.root() || !path.starts_with(library.root()) {
                     shared.recovery.fetch_or(LOST, Ordering::Release);
-                }
-                // Git metadata is not library content: never dirty the index for it.
-                let git_metadata = path
-                    .strip_prefix(library.root())
-                    .ok()
-                    .is_some_and(|r| crate::filesystem::is_git_metadata(&r.to_string_lossy()));
-                if git_metadata {
-                    continue;
                 }
                 if dirty.len() < options.dirty_capacity {
                     dirty.insert(path);

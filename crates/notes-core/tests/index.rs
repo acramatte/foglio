@@ -56,6 +56,51 @@ fn index_lifecycle_warm_reuse_and_disposable_cache() {
 }
 
 #[test]
+fn git_metadata_is_excluded_from_index_search_and_rebuilds() {
+    let (_temp, lib) = setup();
+    for folder in [
+        ".git/objects",
+        "nested/.git",
+        ".wt",
+        ".hidden",
+        ".git-notes",
+    ] {
+        fs::create_dir_all(lib.root().join(folder)).unwrap();
+    }
+    for path in [".git/hidden.md", "nested/.git/hidden.md"] {
+        fs::write(lib.root().join(path), "# Metadata\nneedle").unwrap();
+    }
+    fs::write(lib.root().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
+    fs::write(lib.root().join(".wt/.git"), "gitdir: elsewhere\n").unwrap();
+    let paths = [".git-notes/a.md", ".git.md", ".hidden/a.md", "a.md"];
+    for path in paths {
+        fs::write(lib.root().join(path), "# Content\nneedle").unwrap();
+    }
+    for status in [lib.status(), lib.rescan(), lib.reindex()] {
+        let status = status.unwrap();
+        assert_eq!(status.discovered_notes, paths.len());
+        assert_eq!(status.indexed_notes, paths.len());
+        assert!(!status.incomplete);
+        assert!(status.diagnostics.is_empty());
+    }
+    let hits = lib.search(&SearchQuery::literal("needle")).unwrap().hits;
+    let mut found = hits.iter().map(|hit| hit.path.as_str()).collect::<Vec<_>>();
+    found.sort_unstable();
+    assert_eq!(found, paths);
+    // The exclusion must not hide unsupported files elsewhere in the library.
+    fs::write(lib.root().join("unrelated.txt"), "not a note").unwrap();
+    let status = lib.status().unwrap();
+    assert!(status.incomplete);
+    assert_eq!(status.diagnostics.len(), 1);
+    assert_eq!(status.diagnostics[0].path, "unrelated.txt");
+    assert_eq!(status.diagnostics[0].code, notes_core::ErrorCode::Skipped);
+    assert_eq!(
+        fs::read_to_string(lib.root().join(".git/hidden.md")).unwrap(),
+        "# Metadata\nneedle"
+    );
+}
+
+#[test]
 fn first_seen_survives_saves_moves_reindex_and_never_grows() {
     let (_temp, lib) = setup();
     lib.create("a.md", "apple", &[]).unwrap();

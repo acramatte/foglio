@@ -234,6 +234,7 @@ fn git_metadata_is_absent_from_discovery_without_touching_hidden_notes() {
     fs::create_dir_all(lib.root().join(".git/objects/ab")).unwrap();
     fs::write(lib.root().join(".git/HEAD"), "ref: refs/heads/main\n").unwrap();
     fs::write(lib.root().join(".git/config"), "[core]\n").unwrap();
+    fs::write(lib.root().join(".git/hidden.md"), "# Not a note\n").unwrap();
     fs::create_dir_all(lib.root().join("nested/repo/.git/refs")).unwrap();
     fs::write(lib.root().join("nested/repo/.git/config"), "[core]\n").unwrap();
     // Git worktree form: a `.git` pointer file instead of a directory.
