@@ -20,13 +20,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb"],
+    "targets": ["deb", "rpm", "appimage"],
     "category": "Productivity",
     "shortDescription": "Local-first Markdown notes",
     "longDescription": "A Markdown source editor and filesystem CLI. Notes remain ordinary files; the search index is disposable. Linux local filesystems only.",
     "icon": ["icons/icon.png"],
     "linux": {
       "deb": {
+        "files": {
+          "/usr/bin/notes": "../../../target/release/notes"
+        }
+      },
+      "rpm": {
         "files": {
           "/usr/bin/notes": "../../../target/release/notes"
         }

@@ -18,7 +18,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux (deb + CLI tarball)
+          - name: Linux (deb, rpm, AppImage + CLI tarball)
             runs-on: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - name: macOS arm64 (dmg + CLI tarball)
@@ -77,6 +77,8 @@ jobs:
         run: |
           mkdir -p dist
           find target -path '*bundle/deb/*.deb' -exec cp {} dist/ \;
+          find target -path '*bundle/rpm/*.rpm' -exec cp {} dist/ \;
+          find target -path '*bundle/appimage/*.AppImage' -exec cp {} dist/ \;
           find target -path '*bundle/dmg/*.dmg' -exec cp {} dist/ \;
           find target -path '*/release/foglio-notes-v*.tar.gz' -exec cp {} dist/ \;
           ls -l dist/
@@ -105,8 +107,8 @@ jobs:
           minisign -Sm dist/release.txt -s "$key"
           # Checksums let users verify any download independently of the app.
           # Each platform only has its own artifact kinds, so checksum whatever
-          # exists instead of globbing all three patterns literally.
-          (cd dist && find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.dmg' -o -name '*.tar.gz' \) | sed 's|^\./||' | sort | xargs shasum -a 256 > SHA256SUMS)
+          # exists instead of globbing all patterns literally.
+          (cd dist && find . -maxdepth 1 -type f \( -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o -name '*.dmg' -o -name '*.tar.gz' \) | sed 's|^\./||' | sort | xargs shasum -a 256 > SHA256SUMS)
           cat dist/SHA256SUMS
           minisign -Sm dist/SHA256SUMS -s "$key"
           ls -l dist/

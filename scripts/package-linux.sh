@@ -22,7 +22,7 @@ cargo build --locked --release -p notes-cli
 cd apps/desktop
 npm ci
 if [[ -n "$override" ]]; then
-  npm run tauri -- build --bundles deb --config "../../$override" -- --locked
+  npm run tauri -- build --bundles deb,rpm,appimage --config "../../$override" -- --locked
 else
-  npm run tauri -- build --bundles deb -- --locked
+  npm run tauri -- build --bundles deb,rpm,appimage -- --locked
 fi
