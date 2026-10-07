@@ -65,6 +65,15 @@ jobs:
           node-version: '24.18.0'
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      - name: Frontend dependencies and checks
+        id: frontend
+        background: true
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
       - name: Install native desktop prerequisites
         run: |
           sudo apt-get update
@@ -72,13 +81,8 @@ jobs:
           rustup toolchain install --no-self-update
       - name: Cache Rust dependencies and artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-      - name: Frontend dependencies and checks
-        working-directory: apps/desktop
-        run: |
-          npm ci
-          npm run typecheck
-          npm test
-          npm run build
+      - name: Wait for frontend checks and build
+        wait: frontend
       - name: Desktop Rust tests and lint
         run: |
           cargo test --locked -p notes-desktop

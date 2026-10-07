@@ -70,6 +70,8 @@ The product is **Foglio**; the executable is `notes`. Its commands cover library
 
 Tests use isolated temporary libraries and the compiled executable; personal notes are never used as fixtures. The full local qualification also covers the desktop app, native WebKit acceptance, Debian package construction, and staged-package execution. Run `bash scripts/package-linux.sh` to create a Debian/amd64 package. Detailed evidence, limits, and release blockers are in [Phase 7](docs/phase7.md).
 
+[CI](.github/workflows/ci.yml) runs core/CLI, desktop, and Linux packaging in separate jobs. The desktop job runs frontend dependencies, checks, and build in the background while native prerequisites and the Rust cache are prepared, then explicitly waits for successful frontend completion before running Rust tests and Clippy. Cargo commands remain sequential, and staged-package acceptance runs only after packaging finishes.
+
 ## Project documents
 
 - [Product specification](docs/specs/product.md): user-facing scope and requirements.
