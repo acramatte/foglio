@@ -1,0 +1,132 @@
+#!/usr/bin/env bash
+# Prepares a fresh Amp orb (Debian 12) with Foglio's pinned toolchains and
+# dependencies. Must stay non-interactive and idempotent: it reruns on top of
+# stale snapshots, so every step skips work that is already done.
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
+
+# Versions mirror rust-toolchain.toml, mise.toml, docs/phase4.md and CI.
+node_version="24.18.0"
+node_sha256="55aa7153f9d88f28d765fcdad5ae6945b5c0f98a36881703817e4c450fa76742"
+git_cliff_version="2.14.1"
+git_cliff_sha512="bb40f68e752db1a32526c43e0108e8eff785f7c24c67024cffe1c316e034372975fd78c9af8e9a48148235aad15c9a103f1a5b490c282f1db09a7a793794b69f"
+tauri_driver_version="2.0.6"
+
+node_dir="$HOME/.local/node-v${node_version}-linux-x64"
+cargo_bin="$HOME/.cargo/bin"
+local_bin="$HOME/.local/bin"
+export PATH="$node_dir/bin:$cargo_bin:$local_bin:$PATH"
+export DEBIAN_FRONTEND=noninteractive
+
+step() {
+  local name="$1"
+  shift
+  local start=$SECONDS
+  echo "==> $name"
+  "$@"
+  echo "<== $name ($((SECONDS - start))s)"
+}
+
+install_apt_packages() {
+  # Native desktop, packaging and WebKit acceptance prerequisites (CI package job).
+  local packages=(
+    build-essential pkg-config curl xz-utils
+    libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+    patchelf xvfb xauth webkit2gtk-driver
+  )
+  local missing=()
+  for pkg in "${packages[@]}"; do
+    dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed" || missing+=("$pkg")
+  done
+  if ((${#missing[@]} == 0)); then
+    echo "apt packages already installed"
+    return
+  fi
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq --no-install-recommends "${missing[@]}"
+}
+
+install_rust() {
+  if ! command -v rustup >/dev/null; then
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs |
+      sh -s -- -y --no-modify-path --profile minimal --default-toolchain none
+  fi
+  # Installs the channel and components pinned in rust-toolchain.toml.
+  rustup toolchain install --no-self-update
+  rustc --version
+}
+
+install_node() {
+  if [[ ! -x "$node_dir/bin/node" ]]; then
+    local tmp
+    tmp="$(mktemp -d)"
+    local archive="node-v${node_version}-linux-x64.tar.xz"
+    curl -fsSL -o "$tmp/$archive" "https://nodejs.org/dist/v${node_version}/$archive"
+    echo "$node_sha256  $tmp/$archive" | sha256sum -c --quiet
+    mkdir -p "$HOME/.local"
+    tar -xJf "$tmp/$archive" -C "$HOME/.local"
+    rm -rf "$tmp"
+  fi
+  echo "node $(node --version), npm $(npm --version)"
+}
+
+install_git_cliff() {
+  if [[ "$(git-cliff --version 2>/dev/null || true)" == "git-cliff $git_cliff_version" ]]; then
+    echo "git-cliff $git_cliff_version already installed"
+    return
+  fi
+  local tmp
+  tmp="$(mktemp -d)"
+  local archive="git-cliff-${git_cliff_version}-x86_64-unknown-linux-gnu.tar.gz"
+  curl -fsSL -o "$tmp/$archive" \
+    "https://github.com/orhun/git-cliff/releases/download/v${git_cliff_version}/$archive"
+  echo "$git_cliff_sha512  $tmp/$archive" | sha512sum -c --quiet
+  tar -xzf "$tmp/$archive" -C "$tmp"
+  mkdir -p "$local_bin"
+  install -m 0755 "$tmp/git-cliff-${git_cliff_version}/git-cliff" "$local_bin/git-cliff"
+  rm -rf "$tmp"
+  git-cliff --version
+}
+
+persist_path() {
+  # Amp and supervised services start in fresh login shells; expose the toolchains there.
+  local marker="# foglio orb toolchains (.agents/setup)"
+  if ! grep -Fqx "$marker" "$HOME/.bash_profile" 2>/dev/null; then
+    cat >>"$HOME/.bash_profile" <<EOF
+
+$marker
+case ":\$PATH:" in
+  *":$node_dir/bin:"*) ;;
+  *) export PATH="$node_dir/bin:$cargo_bin:$local_bin:\$PATH" ;;
+esac
+EOF
+  fi
+}
+
+install_tauri_driver() {
+  # cargo install skips quickly when this exact version is already installed.
+  cargo install tauri-driver --version "$tauri_driver_version" --locked
+}
+
+install_npm_dependencies() {
+  (cd apps/desktop && npm ci --no-audit --no-fund)
+}
+
+warm_cargo() {
+  cargo fetch --locked
+  # Prebuild the default core/CLI gates so agents start with a warm target/.
+  cargo build --locked -p notes-core -p notes-cli --all-targets --all-features
+  cargo clippy --locked -p notes-core -p notes-cli --all-targets --all-features
+}
+
+step "apt packages" install_apt_packages
+step "rust toolchain" install_rust
+step "node $node_version" install_node
+step "git-cliff $git_cliff_version" install_git_cliff
+step "login shell PATH" persist_path
+step "npm dependencies" install_npm_dependencies
+step "cargo warm build" warm_cargo
+step "tauri-driver $tauri_driver_version" install_tauri_driver
+echo "setup complete"
