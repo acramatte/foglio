@@ -535,6 +535,27 @@ describe("desktop UI state", () => {
   expect(list.parentElement).toBe(scroll);
   expect(list.querySelectorAll(".note-card")).toHaveLength(2);
  });
+ it("keeps the list scroll position across a background library refresh",async()=>{
+  // The watcher's 30-second safety rescan bumps the generation; the list
+  // rebuild must not jump a scrolled reader back to the top.
+  const {host,api}=setup();await app.start();await app.loadList();
+  const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
+  scroll.scrollTop=500;
+  vi.mocked(api.state).mockResolvedValue({...state,generation:2});
+  vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});
+  await app.poll();
+  expect(scroll.scrollTop).toBe(500);
+  expect(scroll.querySelectorAll(".note-card")).toHaveLength(2);
+ });
+ it("scrolls the list back to the top when the search or filters change",async()=>{
+  const {host}=setup();await app.start();await app.loadList();
+  const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
+  scroll.scrollTop=500;
+  const search=host.querySelector<HTMLInputElement>("[data-testid=search-input]")!;
+  search.value="a";
+  search.dispatchEvent(new Event("input",{bubbles:true}));
+  await vi.waitFor(()=>expect(scroll.scrollTop).toBe(0));
+ });
  it("renders notes in the browse order instead of sorting alphabetically",async()=>{
   // The backend orders by recency, so an alphabetically later note leads when
   // it was changed more recently. The list must keep the received order.

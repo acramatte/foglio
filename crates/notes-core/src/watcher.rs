@@ -71,8 +71,11 @@ impl WatchOptions {
 }
 #[derive(Debug, Clone, Default)]
 pub struct WatchSnapshot {
-    /// Monotonic for this watcher lifetime, advanced after each reconciliation.
-    /// Event gaps require refetch; this is not a persisted/distributed sequence.
+    /// Monotonic for this watcher lifetime, advanced only after a reconciliation
+    /// that observes a domain change (notes, diagnostics, watcher health). A
+    /// quiet safety rescan keeps the previous generation so consumers do not
+    /// refetch and re-render unchanged state. Event gaps require refetch; this
+    /// is not a persisted/distributed sequence.
     pub generation: u64,
     /// Last committed eligible records, potentially stale when error is present.
     pub notes: Vec<WatchedNote>,
@@ -426,7 +429,6 @@ fn run(
 fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) {
     let previous = shared.snapshot.lock().unwrap().clone();
     let mut next = previous.clone();
-    next.generation += 1;
     next.paused = shared.paused.load(Ordering::Acquire);
     let native_active = backend_error.is_none();
     match library.watch_reconcile() {
@@ -444,6 +446,24 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
     if next.error.is_some() {
         next.status.incomplete = true;
     }
+    // A reconciliation that observed no domain change (for example the periodic
+    // safety rescan of a quiet library) must keep the previous snapshot and
+    // generation: bumping would make every consumer refetch and re-render
+    // unchanged state on each safety interval. Run-scoped status counters are
+    // deliberately excluded; they are scan bookkeeping, not domain state.
+    let diagnostics_changed = serde_json::to_string(&previous.status.diagnostics).unwrap()
+        != serde_json::to_string(&next.status.diagnostics).unwrap();
+    let changed = previous.generation == 0
+        || next.paused != previous.paused
+        || next.error != previous.error
+        || next.status.incomplete != previous.status.incomplete
+        || next.status.watcher_active != previous.status.watcher_active
+        || next.notes != previous.notes
+        || diagnostics_changed;
+    if !changed {
+        return;
+    }
+    next.generation = previous.generation + 1;
     let generation = next.generation;
     // Release state lock before publishing: subscription registration uses reverse
     // access order, and consumers must be able to refetch committed state immediately.
@@ -459,9 +479,7 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
             },
         );
     }
-    if serde_json::to_string(&previous.status.diagnostics).unwrap()
-        != serde_json::to_string(&next.status.diagnostics).unwrap()
-    {
+    if diagnostics_changed {
         shared.publish(
             generation,
             EventKind::DiagnosticsChanged {

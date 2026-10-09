@@ -146,8 +146,13 @@ fn pause_resume_manual_loss_periodic_and_restart() {
     let mut opts = options();
     opts.safety_interval = Duration::from_millis(120);
     let w = Watcher::start(lib.clone(), opts).unwrap();
-    let initial = w.snapshot().generation;
-    wait(&w, |s| s.generation > initial); // Independent periodic pass, no file hints.
+    // A quiet periodic pass no longer advances the generation; prove the worker
+    // reconciles by observing a real change instead.
+    writer(
+        &lib,
+        "import pathlib,sys\n(pathlib.Path(sys.argv[1])/'seeded.md').write_text('---\\nid: 01ARZ3NDEKTSV4RRFFQ69G5FAV\\n---\\n# Seeded')",
+    );
+    wait(&w, |s| s.notes.len() == 1);
     w.pause();
     thread::sleep(Duration::from_millis(50));
     let generation = w.snapshot().generation;
@@ -158,18 +163,26 @@ fn pause_resume_manual_loss_periodic_and_restart() {
     thread::sleep(Duration::from_millis(250));
     assert_eq!(w.snapshot().generation, generation);
     w.resume();
-    wait(&w, |s| s.notes.len() == 1 && !s.paused);
+    wait(&w, |s| s.notes.len() == 2 && !s.paused);
     let sub = w.subscribe(32).unwrap();
     sub.try_recv();
     let generation = w.snapshot().generation;
+    // Recovery invalidations publish at the current generation. A gap that
+    // changes nothing must not advance it or fabricate a delta to replay.
     w.report_event_loss();
-    wait(&w, |s| s.generation > generation);
-    assert!(drain(&sub).iter().any(
-        |e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == "watcher_gap")
-    ));
-    let generation = w.snapshot().generation;
+    wait(&w, |_s| {
+        drain(&sub).iter().any(
+            |e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == "watcher_gap"),
+        )
+    });
+    assert_eq!(w.snapshot().generation, generation);
     w.rescan();
-    wait(&w, |s| s.generation > generation);
+    wait(&w, |_s| {
+        drain(&sub)
+            .iter()
+            .any(|e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == "manual"))
+    });
+    assert_eq!(w.snapshot().generation, generation);
     w.shutdown().unwrap();
     assert!(sub.is_closed());
     writer(
