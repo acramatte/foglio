@@ -1,7 +1,7 @@
 //! Desktop boundary. Slow core work and watcher joins run on blocking workers.
 use notes_core::{
     Library,
-    library::{Diagnostic, NoteSummary},
+    library::Diagnostic,
     search::{SearchHit, SearchQuery},
     watcher::{Subscription, WatchOptions, Watcher},
 };
@@ -172,10 +172,34 @@ pub struct Browse {
     pub session: u64,
     pub generation: u64,
     pub root: String,
-    pub notes: Vec<NoteSummary>,
+    pub notes: Vec<BrowseNote>,
     pub folders: Vec<String>,
     pub diagnostics: Vec<Diagnostic>,
     pub incomplete: bool,
+}
+/// One row of the desktop notes list: a library summary plus the filesystem
+/// modification time that orders the list.
+#[derive(Serialize)]
+pub struct BrowseNote {
+    pub path: String,
+    pub title: String,
+    pub tags: Vec<String>,
+    /// Filesystem modification time in Unix milliseconds. `None` means the
+    /// time is unavailable: the filesystem does not report one, or the file
+    /// could not be stat'd after the scan. A note that was created and never
+    /// edited carries its creation time here, so a creation is a change; a
+    /// copied or restored file carries its preserved older mtime.
+    pub modified_ms: Option<i64>,
+}
+/// Most recently changed first, so a note edited last leads and a note only
+/// created follows by its creation time. Unavailable times sort after all
+/// known times, alphabetically by path, as do equal times.
+fn sort_by_recency(notes: &mut [BrowseNote]) {
+    notes.sort_by(|a, b| {
+        b.modified_ms
+            .cmp(&a.modified_ms)
+            .then_with(|| a.path.cmp(&b.path))
+    });
 }
 #[derive(Serialize)]
 pub struct Search {
@@ -199,14 +223,28 @@ pub struct Note {
     pub first_seen: Option<i64>,
 }
 
+fn unix_ms(time: std::time::SystemTime) -> Option<i64> {
+    time.duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|d| i64::try_from(d.as_millis()).ok())
+}
+
 /// Filesystem creation time in Unix milliseconds. `None` means the filesystem
 /// does not report a birth time, not that the note is unknown.
 pub fn created_unix_ms(path: &std::path::Path) -> Option<i64> {
     std::fs::metadata(path)
         .ok()
         .and_then(|m| m.created().ok())
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .and_then(|d| i64::try_from(d.as_millis()).ok())
+        .and_then(unix_ms)
+}
+
+/// Filesystem modification time in Unix milliseconds. `None` means the time
+/// could not be read, not that the note is unknown.
+pub fn modified_unix_ms(path: &std::path::Path) -> Option<i64> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(unix_ms)
 }
 #[derive(Serialize)]
 pub struct Resolved {
@@ -370,11 +408,24 @@ impl Backend {
             );
             folders.sort();
             folders.dedup();
+            let root = s.library.root().to_path_buf();
+            let mut notes: Vec<BrowseNote> = report
+                .summaries()
+                .into_iter()
+                .map(|summary| BrowseNote {
+                    modified_ms: modified_unix_ms(&root.join(&summary.path)),
+                    path: summary.path,
+                    title: summary.title,
+                    tags: summary.tags,
+                })
+                .collect();
+            // Most recently changed first; see `sort_by_recency`.
+            sort_by_recency(&mut notes);
             Ok(Browse {
                 session,
                 generation,
                 root: s.library.root().to_string_lossy().into_owned(),
-                notes: report.summaries(),
+                notes,
                 folders,
                 incomplete: report.incomplete
                     || !diagnostics.is_empty()
@@ -755,6 +806,30 @@ mod mutation_tests {
             );
             assert_eq!(dto.path, "a.md");
         }
+    }
+
+    #[test]
+    fn sort_by_recency_orders_known_times_then_unavailable_ones() {
+        let note = |path: &str, modified_ms: Option<i64>| BrowseNote {
+            path: path.into(),
+            title: path.into(),
+            tags: vec![],
+            modified_ms,
+        };
+        let mut notes = vec![
+            note("z.md", Some(1_700_000_000_000)),
+            note("a.md", None),
+            note("b.md", Some(1_700_000_000_000)),
+            note("c.md", Some(1_699_999_999_999)),
+            note("d.md", None),
+        ];
+        sort_by_recency(&mut notes);
+        assert_eq!(
+            notes.iter().map(|n| n.path.as_str()).collect::<Vec<_>>(),
+            // Equal known times break alphabetically; unavailable times come
+            // after every known time, also alphabetically.
+            ["b.md", "z.md", "c.md", "a.md", "d.md"]
+        );
     }
 
     #[test]

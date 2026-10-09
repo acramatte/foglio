@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { App } from "./app";
 import type { Api, Note, DesktopState, Browse } from "./api";
 const state: DesktopState = {session:1,root:"/notes",generation:1,watcher_active:true,error:null};
-const browse: Browse = {session:1,generation:1,root:"/notes",notes:[{path:"a.md",title:"One",tags:["work"]},{path:"b.md",title:"Two",tags:[]}],folders:["empty"],diagnostics:[],incomplete:false};
+const browse: Browse = {session:1,generation:1,root:"/notes",notes:[{path:"a.md",title:"One",tags:["work"],modified_ms:2000},{path:"b.md",title:"Two",tags:[],modified_ms:1000}],folders:["empty"],diagnostics:[],incomplete:false};
 const note = (path:string, body=path):Note => ({session:1,path,title:path,tags:[],body,source:body,revision:"hash",first_seen:null});
 function deferred<T>() { let resolve!:(value:T)=>void; const promise = new Promise<T>(r => {resolve=r}); return {promise,resolve}; }
 let app:App;
@@ -271,10 +271,10 @@ describe("Phase 7 keyboard and accessibility", () => {
  });
  it("shows recursive note counts for All notes and folders, but not tags", async () => {
   const counted: Browse = {...browse, notes:[
-   {path:"root.md",title:"Root",tags:["work"]},
-   {path:"blog/post.md",title:"Post",tags:["work"]},
-   {path:"blog/drafts/idea.md",title:"Idea",tags:[]},
-   {path:"tests/case.md",title:"Case",tags:[]},
+   {path:"root.md",title:"Root",tags:["work"],modified_ms:4000},
+   {path:"blog/post.md",title:"Post",tags:["work"],modified_ms:3000},
+   {path:"blog/drafts/idea.md",title:"Idea",tags:[],modified_ms:2000},
+   {path:"tests/case.md",title:"Case",tags:[],modified_ms:1000},
   ],folders:["blog","blog/drafts","empty","tests"]};
   const {host}=setup({browse:vi.fn().mockResolvedValue(counted)});await app.start();
   const filter=(key:string)=>host.querySelector<HTMLElement>(`[data-filter-key="${key}"]`)!;
@@ -535,6 +535,18 @@ describe("desktop UI state", () => {
   expect(list.parentElement).toBe(scroll);
   expect(list.querySelectorAll(".note-card")).toHaveLength(2);
  });
+ it("renders notes in the browse order instead of sorting alphabetically",async()=>{
+  // The backend orders by recency, so an alphabetically later note leads when
+  // it was changed more recently. The list must keep the received order.
+  const recent: Browse={...browse,notes:[
+   {path:"z.md",title:"Zebra",tags:[],modified_ms:3000},
+   {path:"a.md",title:"Alpha",tags:[],modified_ms:2000},
+   {path:"m.md",title:"Mid",tags:[],modified_ms:1000},
+  ]};
+  const {host}=setup({browse:vi.fn().mockResolvedValue(recent)});await app.start();await app.loadList();
+  const paths=[...host.querySelectorAll<HTMLButtonElement>(".note-card")].map(b=>b.dataset.notePath);
+  expect(paths).toEqual(["z.md","a.md","m.md"]);
+ });
  it("owns preview scrolling in a wrapper that follows mode and note changes",async()=>{
   const {host}=setup();await app.start();
   const preview=host.querySelector<HTMLElement>("[data-testid=preview]")!;
@@ -574,7 +586,7 @@ describe("desktop UI state", () => {
  });
  it("uses fresh browse counts when a creation races the watcher generation",async()=>{
   HTMLDialogElement.prototype.showModal=function(){this.open=true;};HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const updated: Browse={...browse,generation:2,notes:[...browse.notes,{path:"new.md",title:"New",tags:[]}]};
+  const updated: Browse={...browse,generation:2,notes:[...browse.notes,{path:"new.md",title:"New",tags:[],modified_ms:3000}]};
   const {host,api}=setup({
    browse:vi.fn().mockResolvedValueOnce(browse).mockResolvedValue(updated),
    create:vi.fn().mockResolvedValue({session:1,path:"new.md",revision:"r1",file_committed:true,warnings:[]}),
@@ -722,7 +734,7 @@ describe("desktop UI state", () => {
   expect(host.querySelector("article")?.textContent?.trim()).toBe("Edited body");
   expect(host.querySelector('[data-note-path="a.md"]')?.getAttribute("aria-pressed")).toBe("true");
   vi.mocked(api.state).mockResolvedValue({...state,generation:3});
-  vi.mocked(api.browse).mockResolvedValue({...browse,generation:3,notes:[{path:"moved.md",title:"Moved",tags:[]}]});
+  vi.mocked(api.browse).mockResolvedValue({...browse,generation:3,notes:[{path:"moved.md",title:"Moved",tags:[],modified_ms:3000}]});
   vi.mocked(api.open).mockRejectedValue("note not found: a.md");await app.poll();
   expect(api.open).toHaveBeenLastCalledWith(1,"a.md");
   expect(host.querySelector("article")?.textContent).toContain("Note unavailable");

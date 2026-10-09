@@ -11,6 +11,8 @@ export interface Summary {
   path: string;
   title: string;
   tags: string[];
+  /** Filesystem modification time in Unix ms; null when the filesystem does not report one. A created-but-never-edited note carries its creation time. */
+  modified_ms: number | null;
 }
 export interface Browse {
   session: number;
