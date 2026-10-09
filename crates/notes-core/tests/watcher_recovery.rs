@@ -169,22 +169,29 @@ fn pause_resume_manual_loss_periodic_and_restart() {
     let generation = w.snapshot().generation;
     // Recovery invalidations publish at the current generation. A gap that
     // changes nothing must not advance it or fabricate a delta to replay.
-    w.report_event_loss();
-    wait(&w, |_s| {
-        drain(&sub).iter().any(
-            |e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == "watcher_gap"),
-        )
-    });
-    assert_eq!(w.snapshot().generation, generation);
-    w.rescan();
-    wait(&w, |_s| {
-        drain(&sub)
+    // Invalidations are published before their reconcile runs, so keep every
+    // event and judge only after shutdown has joined the worker.
+    let seen = std::cell::RefCell::new(Vec::new());
+    let saw = |wanted: &str| {
+        seen.borrow_mut().extend(drain(&sub));
+        seen.borrow()
             .iter()
-            .any(|e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == "manual"))
-    });
-    assert_eq!(w.snapshot().generation, generation);
+            .any(|e| matches!(&e.kind, EventKind::RescanRequired { reason } if reason == wanted))
+    };
+    w.report_event_loss();
+    wait(&w, |_s| saw("watcher_gap"));
+    w.rescan();
+    wait(&w, |_s| saw("manual"));
     w.shutdown().unwrap();
     assert!(sub.is_closed());
+    // The manual invalidation reads the generation after the gap's reconcile
+    // finished; any delta from the rescan's reconcile is still queued here.
+    seen.borrow_mut().extend(drain(&sub));
+    assert!(
+        seen.borrow().iter().all(|e| e.generation == generation),
+        "{:?}",
+        seen.borrow()
+    );
     writer(
         &lib,
         "import pathlib,sys\nf=pathlib.Path(sys.argv[1])/'delayed.md';f.write_text(f.read_text().replace('Delayed','Offline'))",

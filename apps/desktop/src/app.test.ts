@@ -535,17 +535,28 @@ describe("desktop UI state", () => {
   expect(list.parentElement).toBe(scroll);
   expect(list.querySelectorAll(".note-card")).toHaveLength(2);
  });
- it("keeps the list scroll position across a background library refresh",async()=>{
-  // The watcher's 30-second safety rescan bumps the generation; the list
-  // rebuild must not jump a scrolled reader back to the top.
-  const {host,api}=setup();await app.start();await app.loadList();
+ it.each(["", "o"])("keeps the list scroll position across a background library refresh (query=%j)",async(query)=>{
+  // A background refresh (new generation or browse cadence) must not jump a
+  // scrolled reader back to the top. jsdom never clamps scrollTop, so emulate
+  // the browser: once the list holds no cards when layout can run (here, at
+  // each mutation callback), the collapsed container scrolls back to 0. The
+  // search case awaits mid-rebuild, so it also exercises loadList's restore.
+  const hits=browse.notes.map(({path,title})=>({path,title}));
+  const {host,api}=setup({search:vi.fn().mockResolvedValue({session:1,hits,incomplete:false})});
+  await app.start();
+  host.querySelector<HTMLInputElement>("[data-testid=search-input]")!.value=query;await app.loadList();
+  const list=host.querySelector<HTMLElement>("[data-testid=note-list]")!;
   const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
   scroll.scrollTop=500;
-  vi.mocked(api.state).mockResolvedValue({...state,generation:2});
-  vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});
-  await app.poll();
-  expect(scroll.scrollTop).toBe(500);
-  expect(scroll.querySelectorAll(".note-card")).toHaveLength(2);
+  const clamp=new MutationObserver(()=>{if (!list.querySelector(".note-card")) scroll.scrollTop=0;});
+  clamp.observe(list,{childList:true});
+  try {
+   vi.mocked(api.state).mockResolvedValue({...state,generation:2});
+   vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});
+   await app.poll();
+   expect(scroll.scrollTop).toBe(500);
+   expect(scroll.querySelectorAll(".note-card")).toHaveLength(2);
+  } finally { clamp.disconnect(); }
  });
  it("re-browses on the cadence even when the generation is unchanged",async()=>{
   // Folders, recency order and folder diagnostics come from disk, not the
