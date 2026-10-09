@@ -221,3 +221,36 @@ fn deterministic_reconciliation_hashes_content_and_overflow_is_sticky() {
     );
     assert!(sub.try_recv().is_none());
 }
+
+#[test]
+fn quiet_rescans_keep_the_generation_and_real_changes_advance_it_once() {
+    let temp = tempfile::tempdir().unwrap();
+    let lib = Library::open(&temp.path().join("notes"), &temp.path().join("state"), true).unwrap();
+    let shared = Arc::new(Shared {
+        snapshot: Mutex::new(WatchSnapshot::default()),
+        subscribers: Mutex::new(Vec::new()),
+        recovery: AtomicUsize::new(0),
+        stopped: AtomicBool::new(false),
+        paused: AtomicBool::new(false),
+    });
+    let watcher = Watcher {
+        shared: shared.clone(),
+        worker: None,
+    };
+    reconcile(&lib, &shared, None);
+    assert_eq!(watcher.snapshot().generation, 1);
+    lib.create("a.md", "# One", &[]).unwrap();
+    reconcile(&lib, &shared, None);
+    assert_eq!(watcher.snapshot().generation, 2);
+    // Safety rescans of a quiet library repeat reconciliation without paying a
+    // refetch/re-render in consumers.
+    reconcile(&lib, &shared, None);
+    reconcile(&lib, &shared, None);
+    assert_eq!(watcher.snapshot().generation, 2);
+    // A same-content rewrite is not a domain change either.
+    let bytes = std::fs::read(lib.root().join("a.md")).unwrap();
+    std::fs::write(lib.root().join("a.md"), &bytes).unwrap();
+    reconcile(&lib, &shared, None);
+    assert_eq!(watcher.snapshot().generation, 2);
+    assert_eq!(watcher.snapshot().notes.len(), 1);
+}

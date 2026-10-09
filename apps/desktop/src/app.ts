@@ -37,6 +37,11 @@ type Shortcut = {
 };
 // "Mod" is the platform's primary accelerator: Command on macOS, Ctrl elsewhere.
 const MODIFIER = "Mod";
+// Folders, recency order, and folder I/O diagnostics are read from disk outside
+// the watcher snapshot, so a quiet library never advances the generation for
+// them. Re-browse on this cadence regardless; it mirrors the watcher's
+// safety_interval (crates/notes-core/src/watcher.rs, WatchOptions::default).
+const BROWSE_CADENCE_MS = 30_000;
 // Creation date/time renders in the viewer's locale and the runtime timezone.
 // "First seen" is honest: saves replace the file's inode, so this is the
 // earliest creation time the library has witnessed, not the true origin.
@@ -112,6 +117,7 @@ export class App {
   private readonly resolution = element("div", undefined, "conflict-tools");
   private state: DesktopState | null = null;
   private browse: Browse | null = null;
+  private lastBrowseAt: number | null = null;
   private note: Note | null = null;
   private selected: string | null = null;
   private tag: string | null = null;
@@ -141,6 +147,8 @@ export class App {
   private readonly search = element("input");
   private readonly navigation = element("nav");
   private readonly list = element("div", "", "note-list");
+  private readonly listScroll = element("div", "", "note-list-scroll");
+  private listFilterKey: string | null = null;
   private readonly preview = element("article", "", "preview");
   private readonly previewScroll = element("div", "", "preview-scroll");
   private readonly metadata = element("div", "", "metadata");
@@ -300,9 +308,8 @@ export class App {
     create.dataset.testid="new-note";
     create.setAttribute("aria-keyshortcuts", "Control+n Meta+n");
     create.addEventListener("click",()=>{void this.mutate("create");});
-    const listScroll = element("div", "", "note-list-scroll");
-    listScroll.append(this.list);
-    middle.append(create, this.search, this.count, listScroll);
+    this.listScroll.append(this.list);
+    middle.append(create, this.search, this.count, this.listScroll);
     const reader = element("section", undefined, "reader");
     reader.setAttribute("aria-label", "Note reader");
     this.preview.dataset.testid = "preview";
@@ -687,7 +694,8 @@ export class App {
     const changed =
       force ||
       state.session !== this.state?.session ||
-      state.generation !== this.state?.generation;
+      state.generation !== this.state?.generation ||
+      (!!state.root && this.lastBrowseAt !== null && Date.now() - this.lastBrowseAt >= BROWSE_CADENCE_MS);
     const switched = force || state.session !== this.state?.session;
     this.state = state;
     this.status.textContent = state.root
@@ -730,7 +738,10 @@ export class App {
       this.navigation.replaceChildren();
       this.diagnostics.replaceChildren();
     }
-    if (!this.list.contains(this.host.ownerDocument.activeElement)) this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
+    // Keep existing cards during a background refresh: swapping them for a
+    // placeholder would collapse the list and reset its scroll position.
+    if (!this.list.contains(this.host.ownerDocument.activeElement) && !this.list.querySelector(".note-card"))
+      this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     if (!this.editor) this.metadata.replaceChildren();
     if (!state.root) {
       this.list.replaceChildren();
@@ -762,6 +773,7 @@ export class App {
       if (browse.generation !== state.generation)
         this.state = { ...state, generation: browse.generation };
       this.browse = browse;
+      this.lastBrowseAt = Date.now();
       this.renderNavigation();
       this.renderDiagnostics();
       await this.loadList();
@@ -776,6 +788,7 @@ export class App {
           ),
         );
         this.state = { ...state, generation: -1 };
+        this.lastBrowseAt = null;
       }
     }
     await refreshNote;
@@ -887,6 +900,12 @@ export class App {
     const focusedPath=this.list.contains(focused) ? focused?.dataset.notePath : menuPath;
     if (this.activeMenu===this.contextMenu) this.closeMenu();
     this.count.textContent = "Loading…";
+    // Rebuilding the cards empties the scroll container, which clamps the
+    // browser's scrollTop to 0. Remember the viewport so a background refresh
+    // (for example the watcher's periodic rescan) does not jump the list back
+    // to the top; a new search or filter starts there instead.
+    const scrollPosition = this.listScroll.scrollTop;
+    const filterKey = JSON.stringify([session, query, this.tag, this.folder]);
     this.list.replaceChildren(element("p", "Loading notes…", "empty-list"));
     try {
       let rows: {
@@ -954,6 +973,10 @@ export class App {
         clear.addEventListener("click",()=>{this.search.value="";this.tag=null;this.folder=null;this.renderNavigation();this.search.focus();void this.loadList();});
         this.list.append(clear);
       }
+      // Restore the previous viewport for a same-filter refresh; a new search
+      // or filter legitimately starts at the top.
+      this.listScroll.scrollTop = filterKey === this.listFilterKey ? scrollPosition : 0;
+      this.listFilterKey = filterKey;
       // Do not steal focus if the user left results while the read was pending.
       const active=this.host.ownerDocument.activeElement;
       if (focusedPath && (active===this.host.ownerDocument.body || (focusedInContextMenu && this.contextMenu.contains(active)))) {

@@ -535,6 +535,60 @@ describe("desktop UI state", () => {
   expect(list.parentElement).toBe(scroll);
   expect(list.querySelectorAll(".note-card")).toHaveLength(2);
  });
+ it.each(["", "o"])("keeps the list scroll position across a background library refresh (query=%j)",async(query)=>{
+  // A background refresh (new generation or browse cadence) must not jump a
+  // scrolled reader back to the top. jsdom never clamps scrollTop, so emulate
+  // the browser: once the list holds no cards when layout can run (here, at
+  // each mutation callback), the collapsed container scrolls back to 0. The
+  // search case awaits mid-rebuild, so it also exercises loadList's restore.
+  const hits=browse.notes.map(({path,title})=>({path,title}));
+  const {host,api}=setup({search:vi.fn().mockResolvedValue({session:1,hits,incomplete:false})});
+  await app.start();
+  host.querySelector<HTMLInputElement>("[data-testid=search-input]")!.value=query;await app.loadList();
+  const list=host.querySelector<HTMLElement>("[data-testid=note-list]")!;
+  const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
+  scroll.scrollTop=500;
+  const clamp=new MutationObserver(()=>{if (!list.querySelector(".note-card")) scroll.scrollTop=0;});
+  clamp.observe(list,{childList:true});
+  try {
+   vi.mocked(api.state).mockResolvedValue({...state,generation:2});
+   vi.mocked(api.browse).mockResolvedValue({...browse,generation:2});
+   await app.poll();
+   expect(scroll.scrollTop).toBe(500);
+   expect(scroll.querySelectorAll(".note-card")).toHaveLength(2);
+  } finally { clamp.disconnect(); }
+ });
+ it("re-browses on the cadence even when the generation is unchanged",async()=>{
+  // Folders, recency order and folder diagnostics come from disk, not the
+  // watcher snapshot, so a quiet library must still refresh them.
+  vi.useFakeTimers({toFake:["Date","setInterval","clearInterval"]});
+  try {
+   const {host,api}=setup();await app.start();
+   expect(api.browse).toHaveBeenCalledOnce();
+   vi.mocked(api.browse).mockResolvedValue({...browse,folders:["empty","fresh"]});
+   vi.setSystemTime(Date.now()+30_000);await app.poll();
+   expect(api.browse).toHaveBeenCalledTimes(2);
+   expect(host.querySelector("[data-filter-key='folder:fresh']")).not.toBeNull();
+   expect(host.querySelectorAll(".note-card")).toHaveLength(2);
+  } finally { vi.useRealTimers(); }
+ });
+ it("does not re-browse an unchanged generation within the cadence",async()=>{
+  vi.useFakeTimers({toFake:["Date","setInterval","clearInterval"]});
+  try {
+   const {api}=setup();await app.start();const started=Date.now();
+   for (const elapsed of [750,15_000,29_999]) {vi.setSystemTime(started+elapsed);await app.poll();}
+   expect(api.state).toHaveBeenCalledTimes(4);expect(api.browse).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+ });
+ it("scrolls the list back to the top when the search or filters change",async()=>{
+  const {host}=setup();await app.start();await app.loadList();
+  const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;
+  scroll.scrollTop=500;
+  const search=host.querySelector<HTMLInputElement>("[data-testid=search-input]")!;
+  search.value="a";
+  search.dispatchEvent(new Event("input",{bubbles:true}));
+  await vi.waitFor(()=>expect(scroll.scrollTop).toBe(0));
+ });
  it("renders notes in the browse order instead of sorting alphabetically",async()=>{
   // The backend orders by recency, so an alphabetically later note leads when
   // it was changed more recently. The list must keep the received order.
