@@ -547,6 +547,28 @@ describe("desktop UI state", () => {
   expect(scroll.scrollTop).toBe(500);
   expect(scroll.querySelectorAll(".note-card")).toHaveLength(2);
  });
+ it("re-browses on the cadence even when the generation is unchanged",async()=>{
+  // Folders, recency order and folder diagnostics come from disk, not the
+  // watcher snapshot, so a quiet library must still refresh them.
+  vi.useFakeTimers({toFake:["Date","setInterval","clearInterval"]});
+  try {
+   const {host,api}=setup();await app.start();
+   expect(api.browse).toHaveBeenCalledOnce();
+   vi.mocked(api.browse).mockResolvedValue({...browse,folders:["empty","fresh"]});
+   vi.setSystemTime(Date.now()+30_000);await app.poll();
+   expect(api.browse).toHaveBeenCalledTimes(2);
+   expect(host.querySelector("[data-filter-key='folder:fresh']")).not.toBeNull();
+   expect(host.querySelectorAll(".note-card")).toHaveLength(2);
+  } finally { vi.useRealTimers(); }
+ });
+ it("does not re-browse an unchanged generation within the cadence",async()=>{
+  vi.useFakeTimers({toFake:["Date","setInterval","clearInterval"]});
+  try {
+   const {api}=setup();await app.start();const started=Date.now();
+   for (const elapsed of [750,15_000,29_999]) {vi.setSystemTime(started+elapsed);await app.poll();}
+   expect(api.state).toHaveBeenCalledTimes(4);expect(api.browse).toHaveBeenCalledOnce();
+  } finally { vi.useRealTimers(); }
+ });
  it("scrolls the list back to the top when the search or filters change",async()=>{
   const {host}=setup();await app.start();await app.loadList();
   const scroll=host.querySelector<HTMLElement>(".note-list-scroll")!;

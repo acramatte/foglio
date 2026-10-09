@@ -37,6 +37,11 @@ type Shortcut = {
 };
 // "Mod" is the platform's primary accelerator: Command on macOS, Ctrl elsewhere.
 const MODIFIER = "Mod";
+// Folders, recency order, and folder I/O diagnostics are read from disk outside
+// the watcher snapshot, so a quiet library never advances the generation for
+// them. Re-browse on this cadence regardless; it mirrors the watcher's
+// safety_interval (crates/notes-core/src/watcher.rs, WatchOptions::default).
+const BROWSE_CADENCE_MS = 30_000;
 // Creation date/time renders in the viewer's locale and the runtime timezone.
 // "First seen" is honest: saves replace the file's inode, so this is the
 // earliest creation time the library has witnessed, not the true origin.
@@ -112,6 +117,7 @@ export class App {
   private readonly resolution = element("div", undefined, "conflict-tools");
   private state: DesktopState | null = null;
   private browse: Browse | null = null;
+  private lastBrowseAt: number | null = null;
   private note: Note | null = null;
   private selected: string | null = null;
   private tag: string | null = null;
@@ -688,7 +694,8 @@ export class App {
     const changed =
       force ||
       state.session !== this.state?.session ||
-      state.generation !== this.state?.generation;
+      state.generation !== this.state?.generation ||
+      (!!state.root && this.lastBrowseAt !== null && Date.now() - this.lastBrowseAt >= BROWSE_CADENCE_MS);
     const switched = force || state.session !== this.state?.session;
     this.state = state;
     this.status.textContent = state.root
@@ -766,6 +773,7 @@ export class App {
       if (browse.generation !== state.generation)
         this.state = { ...state, generation: browse.generation };
       this.browse = browse;
+      this.lastBrowseAt = Date.now();
       this.renderNavigation();
       this.renderDiagnostics();
       await this.loadList();
@@ -780,6 +788,7 @@ export class App {
           ),
         );
         this.state = { ...state, generation: -1 };
+        this.lastBrowseAt = null;
       }
     }
     await refreshNote;
