@@ -45,6 +45,48 @@ fn open_reports_first_seen_that_survives_inode_replacing_saves() {
 }
 
 #[test]
+fn browse_orders_notes_by_most_recent_change() {
+    let (_temp, root, state) = fixture();
+    fs::write(root.join("zebra.md"), "# Zebra\nedited\n").unwrap();
+    fs::write(root.join("alpha.md"), "# Alpha\nedited\n").unwrap();
+    fs::write(root.join("mid.md"), "# Mid\ncreated only\n").unwrap();
+    // Distinct modification times: alpha edited last, then mid (created, never
+    // edited, so its mtime is its creation time), then zebra, then the fixture
+    // note. Alphabetical order would put alpha and zebra last. The base is a
+    // fixed whole-second epoch instant, so the assertion is exact regardless
+    // of the filesystem's timestamp resolution.
+    let base_ms: i64 = 1_700_000_000_000;
+    let base = std::time::UNIX_EPOCH + Duration::from_millis(base_ms as u64);
+    for (name, seconds) in [
+        ("folder/a.md", 600u64),
+        ("zebra.md", 1200),
+        ("mid.md", 1800),
+        ("alpha.md", 2400),
+    ] {
+        let file = fs::OpenOptions::new()
+            .append(true)
+            .open(root.join(name))
+            .unwrap();
+        file.set_modified(base + Duration::from_secs(seconds))
+            .unwrap();
+    }
+    let backend = Backend::new().unwrap();
+    let s = backend.select_with_state(&root, &state).unwrap().session;
+    let browse = backend.browse(s).unwrap();
+    assert_eq!(
+        browse
+            .notes
+            .iter()
+            .map(|n| n.path.as_str())
+            .collect::<Vec<_>>(),
+        ["alpha.md", "mid.md", "zebra.md", "folder/a.md"]
+    );
+    assert_eq!(browse.notes[0].modified_ms, Some(base_ms + 2_400_000));
+    assert!(browse.notes.iter().all(|n| n.modified_ms.is_some()));
+    backend.shutdown();
+}
+
+#[test]
 fn desktop_search_matches_word_prefixes_and_prefers_titles() {
     let (_temp, root, state) = fixture();
     fs::write(root.join("memory.md"), "# Memory\nKeep retros short\n").unwrap();
