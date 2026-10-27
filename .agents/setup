@@ -114,19 +114,16 @@ install_npm_dependencies() {
   (cd apps/desktop && npm ci --no-audit --no-fund)
 }
 
-warm_cargo() {
-  cargo fetch --locked
-  # Prebuild the default core/CLI gates so agents start with a warm target/.
-  cargo build --locked -p notes-core -p notes-cli --all-targets --all-features
-  cargo clippy --locked -p notes-core -p notes-cli --all-targets --all-features
-}
-
 step "apt packages" install_apt_packages
 step "rust toolchain" install_rust
 step "node $node_version" install_node
 step "git-cliff $git_cliff_version" install_git_cliff
 step "login shell PATH" persist_path
 step "npm dependencies" install_npm_dependencies
-step "cargo warm build" warm_cargo
+# Orbs build for the host, not every platform represented in Cargo.lock.
+step "cargo dependencies (host only)" cargo fetch --locked --target "$(rustc --print host-tuple)"
+# Preserve the warm core/CLI gates, but time downloads, build and lint separately.
+step "cargo core/CLI build" cargo build --locked -p notes-core -p notes-cli --all-targets --all-features
+step "cargo core/CLI clippy" cargo clippy --locked -p notes-core -p notes-cli --all-targets --all-features
 step "tauri-driver $tauri_driver_version" install_tauri_driver
 echo "setup complete"
