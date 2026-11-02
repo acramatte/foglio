@@ -100,6 +100,9 @@ const SHORTCUTS: ReadonlyArray<{ title: string; items: ReadonlyArray<Shortcut> }
 export class App {
   private editor: Editor | null = null;
   private busy = false;
+  // Banner text that came from backend monitoring state, so recovery can clear
+  // exactly that report without erasing an unrelated operation failure.
+  private monitoringReport: string | null = null;
   private pendingRefresh = false;
   private mode: "source" | "preview" = "preview";
   private lineNumbers = true;
@@ -634,6 +637,7 @@ export class App {
   private report(error: unknown): void {
     this.error.textContent = errorText(error);
     this.error.hidden = false;
+    this.monitoringReport = null;
   }
   private empty(title: string, detail: string): void {
     this.preview.replaceChildren(element("h1", title), element("p", detail));
@@ -703,11 +707,20 @@ export class App {
         ? "Monitoring external changes"
         : "Watcher inactive"
       : "No library selected";
-    if (state.error) this.report(state.error);
-    else if (state.root && !state.watcher_active)
-      this.report(
-        "External monitoring is inactive. Changes may not appear until the library is reopened.",
-      );
+    const monitoring = state.error
+      ? state.error
+      : state.root && !state.watcher_active
+        ? "External monitoring is inactive. Changes may not appear until the library is reopened."
+        : null;
+    if (monitoring) {
+      this.report(monitoring);
+      this.monitoringReport = this.error.textContent;
+    } else if (this.monitoringReport !== null) {
+      // Recovered (for example after transient lock contention): clear only the
+      // monitoring report; any operation failure shown since then replaced it.
+      if (this.error.textContent === this.monitoringReport) this.error.hidden = true;
+      this.monitoringReport = null;
+    }
     // Monitoring refresh must not erase an unrelated operation failure.
     if (!changed) {
       if (this.pendingRefresh && this.selected)

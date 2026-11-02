@@ -811,6 +811,20 @@ describe("desktop UI state", () => {
   expect(host.querySelector<HTMLElement>('[role="alert"]')!.hidden).toBe(false);
   expect(host.querySelector('[role="alert"]')?.textContent).toBe("Watcher failed");
  });
+ it("clears a recovered monitoring error but keeps a later operation failure", async() => {
+  const {host,api}=setup();await app.start();
+  const alert=()=>host.querySelector<HTMLElement>('[role="alert"]')!;
+  const busy="busy: library is locked by another Foglio process";
+  vi.mocked(api.state).mockResolvedValue({...state,generation:2,error:busy});await app.poll();
+  expect(alert().hidden).toBe(false);expect(alert().textContent).toBe(busy);
+  vi.mocked(api.state).mockResolvedValue({...state,generation:3,error:null});await app.poll();
+  expect(alert().hidden).toBe(true);
+  vi.mocked(api.browse).mockRejectedValueOnce({code:"io",message:"Read failed"});
+  vi.mocked(api.state).mockResolvedValue({...state,generation:4,error:busy});await app.poll();
+  await vi.waitFor(()=>expect(alert().textContent).toBe("io: Read failed"));
+  vi.mocked(api.state).mockResolvedValue({...state,generation:5,error:null});await app.poll();
+  expect(alert().hidden).toBe(false);expect(alert().textContent).toBe("io: Read failed");
+ });
  it("ignores resolved links after the selected path changes", async() => {
   const slow=deferred<{session:number;path:string}>();
   const {host,api}=setup({resolve:()=>slow.promise,open:vi.fn(async(_s,path)=>note(path,"[Note](other.md)"))});
