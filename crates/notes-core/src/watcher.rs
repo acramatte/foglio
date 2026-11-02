@@ -29,6 +29,9 @@ const LOST: usize = 2;
 const CLIENT: usize = 4;
 const RESUME: usize = 8;
 const TICK: Duration = Duration::from_millis(10);
+/// Another process (for example a `notes` CLI write) holding the nonblocking
+/// library lock is transient; rescan soon instead of waiting for the safety pass.
+const BUSY_RETRY: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 pub struct WatchOptions {
@@ -181,12 +184,12 @@ impl Watcher {
         let (tx, rx) = mpsc::sync_channel(options.hint_capacity);
         // Register BEFORE any scan. Callback is bounded/nonblocking during startup.
         let native = observe(&library, tx.clone(), shared.clone(), options.dirty_capacity)?;
-        reconcile(&library, &shared, None);
+        let busy = reconcile(&library, &shared, None);
         let state = shared.clone();
         let worker = thread::Builder::new()
             .name("foglio-watcher".into())
             .spawn(move || {
-                run(library, options, state.clone(), tx, rx, native);
+                run(library, options, state.clone(), tx, rx, native, busy);
                 state.finish();
             })?;
         Ok(Self {
@@ -347,6 +350,7 @@ fn run(
     tx: SyncSender<Vec<PathBuf>>,
     rx: Receiver<Vec<PathBuf>>,
     native: RegisteredWatcher,
+    mut busy: bool,
 ) {
     let mut native = Some(native);
     let mut dirty = HashSet::new();
@@ -386,7 +390,8 @@ fn run(
         }
         let recovery = shared.recovery.swap(0, Ordering::AcqRel);
         let periodic = scanned.elapsed() >= options.safety_interval;
-        let retry = backend_error.is_some() && scanned.elapsed() >= Duration::from_secs(1);
+        let retry = (backend_error.is_some() && scanned.elapsed() >= Duration::from_secs(1))
+            || (busy && scanned.elapsed() >= BUSY_RETRY);
         let due = first.is_some_and(|at: Instant| {
             at.elapsed() >= options.max_batch_delay || last.elapsed() >= options.debounce
         });
@@ -417,7 +422,7 @@ fn run(
                     }
                 }
             }
-            reconcile(&library, &shared, backend_error.clone());
+            busy = reconcile(&library, &shared, backend_error.clone());
             dirty.clear();
             first = None;
             scanned = Instant::now();
@@ -426,11 +431,13 @@ fn run(
     }
     drop(native);
 }
-fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) {
+/// Returns whether the pass failed only because the library lock was busy.
+fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) -> bool {
     let previous = shared.snapshot.lock().unwrap().clone();
     let mut next = previous.clone();
     next.paused = shared.paused.load(Ordering::Acquire);
     let native_active = backend_error.is_none();
+    let mut busy = false;
     match library.watch_reconcile() {
         Ok((status, notes)) => {
             next.status = status;
@@ -438,6 +445,7 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
             next.error = backend_error;
         }
         Err(e) => {
+            busy = e.code == ErrorCode::Busy;
             next.error = Some(e.to_string());
             next.status.incomplete = true;
         }
@@ -461,7 +469,7 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
         || next.notes != previous.notes
         || diagnostics_changed;
     if !changed {
-        return;
+        return busy;
     }
     next.generation = previous.generation + 1;
     let generation = next.generation;
@@ -499,7 +507,7 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
         }
         // Eligibility loss is not proof of file deletion. Never invent deletes
         // for unknown coverage, malformed metadata.
-        return;
+        return busy;
     }
     let old: BTreeMap<_, _> = previous
         .notes
@@ -530,4 +538,5 @@ fn reconcile(library: &Library, shared: &Shared, backend_error: Option<String>) 
             shared.publish(generation, kind);
         }
     }
+    busy
 }

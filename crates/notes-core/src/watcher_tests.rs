@@ -131,6 +131,7 @@ fn periodic_pass_repairs_real_edit_with_all_native_hints_dropped() {
             tx,
             rx,
             native,
+            false,
         );
         state.finish();
     });
@@ -253,4 +254,65 @@ fn quiet_rescans_keep_the_generation_and_real_changes_advance_it_once() {
     reconcile(&lib, &shared, None);
     assert_eq!(watcher.snapshot().generation, 2);
     assert_eq!(watcher.snapshot().notes.len(), 1);
+}
+
+#[test]
+fn busy_lock_from_another_process_recovers_before_the_safety_pass() {
+    let temp = tempfile::tempdir().unwrap();
+    let (root, state) = (temp.path().join("notes"), temp.path().join("state"));
+    let lib = Arc::new(Library::open(&root, &state, true).unwrap());
+    lib.create("a.md", "# One", &[]).unwrap();
+    // A separate handle stands in for another process: its flock is a distinct
+    // open file description, so this library's nonblocking lock reports busy.
+    let other = Library::open(&root, &state, false).unwrap();
+    let held = other.lock().unwrap();
+    let watcher = Watcher::start(
+        lib.clone(),
+        WatchOptions {
+            safety_interval: Duration::from_secs(3600),
+            ..WatchOptions::default()
+        },
+    )
+    .unwrap();
+    let error = watcher
+        .snapshot()
+        .error
+        .expect("startup scan must report busy");
+    assert!(
+        error.contains("locked by another Foglio process"),
+        "{error}"
+    );
+    assert!(watcher.snapshot().status.incomplete);
+    drop(held);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while watcher.snapshot().error.is_some() || watcher.snapshot().notes.is_empty() {
+        assert!(
+            Instant::now() < deadline,
+            "busy scan was not retried before the safety interval"
+        );
+        thread::sleep(TICK);
+    }
+    assert!(!watcher.snapshot().status.incomplete);
+    watcher.shutdown().unwrap();
+}
+
+#[test]
+fn only_lock_contention_requests_a_prompt_retry() {
+    let temp = tempfile::tempdir().unwrap();
+    let (root, state) = (temp.path().join("notes"), temp.path().join("state"));
+    let lib = Library::open(&root, &state, true).unwrap();
+    let shared = Shared {
+        snapshot: Mutex::new(WatchSnapshot::default()),
+        subscribers: Mutex::new(Vec::new()),
+        recovery: AtomicUsize::new(0),
+        stopped: AtomicBool::new(false),
+        paused: AtomicBool::new(false),
+    };
+    assert!(!reconcile(&lib, &shared, None));
+    let other = Library::open(&root, &state, false).unwrap();
+    let held = other.lock().unwrap();
+    assert!(reconcile(&lib, &shared, None));
+    drop(held);
+    assert!(!reconcile(&lib, &shared, None));
+    assert!(shared.snapshot.lock().unwrap().error.is_none());
 }
